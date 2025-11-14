@@ -1,24 +1,36 @@
-use ljr::{UserData, lua::Lua, stack_ref::LuaRef};
+use ljr::{UserData, lua::Lua, lua_ref::LuaRef};
 use luajit2_sys as sys;
 use macros::user_data;
 
-struct Person(String);
+struct Person {
+    name: String,
+    other: Option<LuaRef<Person>>,
+}
 
 #[user_data]
 impl Person {
     fn get_name(&self) -> String {
-        self.0.clone()
+        self.name.clone()
     }
 
-    fn external_ref(&self) {}
+    fn get_other_name(&self) -> String {
+        self.other
+            .as_ref()
+            .map(|o| o.as_ref().name.clone())
+            .unwrap_or_default()
+    }
+
+    fn external_ref(&mut self, other: LuaRef<Person>) {
+        self.other = Some(other.to_owned());
+    }
 
     fn greet(&self, other: &Person) {
-        println!("hello my friend {}, i'm {}", other.0, self.0);
+        println!("hello my friend {}, i'm {}", other.name, self.name);
     }
 
     fn change_name(&self, other: &mut Person, new_name: String) {
         println!("change name");
-        other.0 = new_name;
+        other.name = new_name;
     }
 }
 
@@ -28,7 +40,7 @@ struct PersonFactory;
 impl PersonFactory {
     fn new(name: String) -> Person {
         println!("criou nome {}", name);
-        Person(name)
+        Person { name, other: None }
     }
 }
 
@@ -52,6 +64,11 @@ fn main() {
 
         soreto:change_name(paulo, "Soretinho")
         print(paulo:get_name())
+
+        print('-------------')
+        local sorvete = Person.new('Sorvete')
+        soreto:external_ref(sorvete)
+        print(soreto:get_other_name())
 
         return true
         "#,

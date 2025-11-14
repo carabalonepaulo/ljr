@@ -1,6 +1,6 @@
 use luajit2_sys as sys;
 
-use crate::{Nil, UserData};
+use crate::{Nil, UserData, lua_ref::LuaRef};
 
 pub trait ToLua {
     fn to_lua(self, ptr: *mut sys::lua_State);
@@ -95,5 +95,11 @@ where
 }
 
 impl ToLua for () {
-    fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {}
+    fn to_lua(self, _ptr: *mut luajit2_sys::lua_State) {}
+}
+
+impl<T: UserData> ToLua for LuaRef<T> {
+    fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id()) };
+    }
 }

@@ -41,7 +41,10 @@ pub fn from_lua<T: crate::from_lua::FromLua>(
     }
 }
 
-pub fn from_lua_stack_ref<T>(ptr: *mut sys::lua_State, idx: &mut i32) -> crate::stack_ref::LuaRef<T>
+pub fn from_lua_stack_ref<T>(
+    ptr: *mut sys::lua_State,
+    idx: &mut i32,
+) -> crate::stack_ref::StackRef<T>
 where
     T: UserData,
 {

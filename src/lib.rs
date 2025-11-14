@@ -3,6 +3,7 @@ pub mod from_lua;
 pub mod helper;
 mod is_type;
 pub mod lua;
+pub mod lua_ref;
 pub mod stack_ref;
 // pub mod borrow_from_lua;
 // pub mod lua_string;

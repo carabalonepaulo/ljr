@@ -2,7 +2,7 @@ use std::ffi::CStr;
 
 use luajit2_sys as sys;
 
-use crate::{UserData, stack_ref::LuaRef};
+use crate::{UserData, lua_ref::LuaRef, stack_ref::StackRef};
 
 pub trait FromLua {
     type Output;
@@ -80,7 +80,7 @@ impl<T> FromLua for T
 where
     T: UserData,
 {
-    type Output = LuaRef<T>;
+    type Output = StackRef<T>;
 
     fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
         unsafe {
@@ -103,7 +103,7 @@ where
 
             sys::lua_pop(ptr, 2);
         }
-        Some(LuaRef::new(ptr, idx))
+        Some(StackRef::new(ptr, idx))
     }
 }
 
@@ -120,5 +120,38 @@ impl FromLua for () {
 
     fn len() -> i32 {
         0
+    }
+}
+
+impl<T: UserData> FromLua for LuaRef<T> {
+    type Output = LuaRef<T>;
+
+    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+        unsafe {
+            sys::lua_pushvalue(ptr, idx);
+
+            if sys::lua_getmetatable(ptr, -1) == 0 {
+                sys::lua_pop(ptr, 1);
+                return None;
+            }
+
+            sys::lua_getfield(ptr, -1, b"__name\0".as_ptr() as _);
+            let mt_name_ptr = sys::lua_tostring(ptr, -1);
+            if mt_name_ptr.is_null() {
+                sys::lua_pop(ptr, 2);
+                return None;
+            }
+
+            let mt_name = CStr::from_ptr(mt_name_ptr);
+            let expected_name = CStr::from_ptr(T::name());
+            if mt_name != expected_name {
+                sys::lua_pop(ptr, 2);
+                return None;
+            }
+
+            sys::lua_pop(ptr, 2);
+
+            Some(LuaRef::new(ptr))
+        }
     }
 }

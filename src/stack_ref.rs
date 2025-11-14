@@ -4,13 +4,13 @@ use std::marker::PhantomData;
 use crate::{UserData, from_lua::FromLua};
 
 #[derive(Debug, Clone)]
-pub struct LuaRef<T: FromLua + UserData> {
+pub struct StackRef<T: FromLua + UserData> {
     ptr: *mut sys::lua_State,
     idx: i32,
     marker: PhantomData<T>,
 }
 
-impl<T: FromLua + UserData> LuaRef<T> {
+impl<T: FromLua + UserData> StackRef<T> {
     pub fn new(ptr: *mut sys::lua_State, idx: i32) -> Self {
         Self {
             ptr,
@@ -20,7 +20,7 @@ impl<T: FromLua + UserData> LuaRef<T> {
     }
 }
 
-impl<T: FromLua + UserData> std::ops::Deref for LuaRef<T> {
+impl<T: FromLua + UserData> std::ops::Deref for StackRef<T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -31,7 +31,7 @@ impl<T: FromLua + UserData> std::ops::Deref for LuaRef<T> {
     }
 }
 
-impl<T: FromLua + UserData> std::ops::DerefMut for LuaRef<T> {
+impl<T: FromLua + UserData> std::ops::DerefMut for StackRef<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
             let ud_ptr = sys::lua_touserdata(self.ptr, self.idx) as *mut *mut T;
