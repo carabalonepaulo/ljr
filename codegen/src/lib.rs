@@ -102,7 +102,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                             };
                             call_args.push(quote! { #arg_name });
                             args.push(quote! {
-                                let mut #arg_name_tmp = ljr::helper::from_lua_ref::<#inner>(ptr, &mut idx);
+                                let mut #arg_name_tmp = ljr::helper::from_lua_stack_ref::<#inner>(ptr, &mut idx);
                                 let #arg_name = #ref_tk *#arg_name_tmp;
                             });
                         }
@@ -118,7 +118,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                     call_args.push(quote! { ud_ref });
 
                     args.push(quote! {
-                        #let_def ud = ljr::helper::from_lua_ref::<#ud_ty>(ptr, &mut idx);
+                        #let_def ud = ljr::helper::from_lua_stack_ref::<#ud_ty>(ptr, &mut idx);
                         let ud_ref = #ref_tk;
                     });
                 }

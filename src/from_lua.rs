@@ -2,7 +2,7 @@ use std::ffi::CStr;
 
 use luajit2_sys as sys;
 
-use crate::{UserData, lua_ref::LuaRef};
+use crate::{UserData, stack_ref::LuaRef};
 
 pub trait FromLua {
     type Output;

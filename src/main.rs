@@ -1,4 +1,4 @@
-use ljr::{UserData, lua::Lua, lua_ref::LuaRef};
+use ljr::{UserData, lua::Lua, stack_ref::LuaRef};
 use luajit2_sys as sys;
 use macros::user_data;
 
@@ -9,6 +9,8 @@ impl Person {
     fn get_name(&self) -> String {
         self.0.clone()
     }
+
+    fn external_ref(&self) {}
 
     fn greet(&self, other: &Person) {
         println!("hello my friend {}, i'm {}", other.0, self.0);
