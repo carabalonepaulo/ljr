@@ -1,5 +1,4 @@
 use luajit2_sys as sys;
-use std::ffi::CString;
 
 use crate::{Nil, UserData};
 
@@ -37,7 +36,7 @@ impl ToLua for bool {
 
 impl ToLua for &str {
     fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {
-        unsafe { sys::lua_pushstring(ptr, CString::new(self).unwrap().as_ptr()) }
+        unsafe { sys::lua_pushlstring(ptr, self.as_bytes().as_ptr() as *const i8, self.len()) }
     }
 }
 
@@ -58,7 +57,7 @@ where
     T: UserData,
 {
     fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {
-        let size = std::mem::size_of::<T>();
+        let size = std::mem::size_of::<*mut T>();
         let name = T::name();
         let methods = T::functions();
         let self_ptr = Box::into_raw(Box::new(self));
@@ -93,4 +92,8 @@ where
             sys::lua_setmetatable(ptr, -2);
         }
     }
+}
+
+impl ToLua for () {
+    fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {}
 }

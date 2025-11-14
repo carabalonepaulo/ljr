@@ -63,16 +63,17 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                     });
                 }
                 FnParam::Receiver(ty) => {
-                    let ref_tk = if ty.tk_mut.is_some() {
-                        quote! { &mut *ud }
+                    let (let_def, ref_tk) = if ty.tk_mut.is_some() {
+                        (quote! { let mut }, quote! { &mut *ud })
                     } else {
-                        quote! { &*ud }
+                        (quote! { let }, quote! { &*ud })
                     };
 
                     call_args.push(quote! { ud_ref });
 
                     args.push(quote! {
-                        let ud = ljr::helper::from_lua_ref::<#ud_ty>(ptr, &mut idx);
+                        #let_def ud = ljr::helper::from_lua_ref::<#ud_ty>(ptr, &mut idx);
+                        idx += 1;
                         let ud_ref = #ref_tk;
                     });
                 }
@@ -80,23 +81,30 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
         }
 
         let fn_sym = &m.name;
-        args.push(quote! {
-            return ljr::helper::catch(ptr, || #ud_ty::#fn_sym(#(#call_args),*));
-        });
+        let final_block = quote! {
+            ljr::helper::catch(ptr, move || {
+                #(#args)*;
+                #ud_ty::#fn_sym(#(#call_args),*)
+            })
+        };
 
         quote! {
             sys::luaL_Reg {
                 name: #method_name.as_ptr() as _,
                 func: {
                     unsafe extern "C" fn trampoline(ptr: *mut sys::lua_State) -> std::ffi::c_int {
-                        #(#args)*;
-
+                        #final_block
                     }
                     Some(trampoline)
                 }
             }
         }
     });
+
+    let mut reg_list = quote! {};
+    for reg in regs {
+        reg_list.extend(quote! { #reg, });
+    }
 
     quote! {
         #item
@@ -108,7 +116,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
             fn functions() -> Vec<luajit2_sys::luaL_Reg> {
                 vec![
-                    #(#regs),*,
+                    #reg_list
                     sys::luaL_Reg {
                         name: std::ptr::null(),
                         func: None,

@@ -68,9 +68,9 @@ where
                 "unknown panic".to_string()
             };
 
-            let c_err_msg = std::ffi::CString::new(format!("Rust panic: {}", err_msg)).unwrap();
+            let c_err_msg = format!("Rust panic: {}", err_msg);
             unsafe {
-                sys::lua_pushstring(ptr, c_err_msg.as_ptr());
+                sys::lua_pushlstring(ptr, c_err_msg.as_ptr() as _, c_err_msg.len());
                 sys::lua_error(ptr);
             }
 

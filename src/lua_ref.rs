@@ -25,8 +25,8 @@ impl<T: FromLua + UserData> std::ops::Deref for LuaRef<T> {
 
     fn deref(&self) -> &Self::Target {
         unsafe {
-            let ud_ptr = sys::lua_touserdata(self.ptr, self.idx);
-            &*ud_ptr.cast()
+            let ud_ptr = sys::lua_touserdata(self.ptr, self.idx) as *mut *mut T;
+            &*(*ud_ptr)
         }
     }
 }
@@ -34,8 +34,8 @@ impl<T: FromLua + UserData> std::ops::Deref for LuaRef<T> {
 impl<T: FromLua + UserData> std::ops::DerefMut for LuaRef<T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         unsafe {
-            let ud_ptr = sys::lua_touserdata(self.ptr, self.idx);
-            &mut *ud_ptr.cast()
+            let ud_ptr = sys::lua_touserdata(self.ptr, self.idx) as *mut *mut T;
+            &mut *(*ud_ptr)
         }
     }
 }

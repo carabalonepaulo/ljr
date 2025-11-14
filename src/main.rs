@@ -2,22 +2,31 @@ use ljr::{UserData, lua::Lua};
 use luajit2_sys as sys;
 use macros::user_data;
 
-struct Math;
+struct Person(String);
 
 #[user_data]
-impl Math {
-    fn new() -> Self {
-        Math {}
+impl Person {
+    fn get_name(&self) -> String {
+        println!("clonou nome");
+        self.0.clone()
     }
 
-    fn sum(&self, a: i32, b: i32) -> i32 {
-        a + b
+    fn greet(&self, other: &Person) {}
+}
+
+impl Drop for Person {
+    fn drop(&mut self) {
+        println!("person drop");
     }
 }
 
-impl Drop for Math {
-    fn drop(&mut self) {
-        println!("dropping math");
+struct PersonFactory;
+
+#[user_data]
+impl PersonFactory {
+    fn new(name: String) -> Person {
+        println!("criou nome {}", name);
+        Person(name)
     }
 }
 
@@ -25,15 +34,22 @@ fn main() {
     let mut lua = Lua::new();
     lua.open_libs();
 
-    lua.register("math", Math::new());
+    // lua.register("math", Math::new());
+    lua.register("person", PersonFactory);
 
-    lua.do_string::<()>(
+    lua.do_string::<bool>(
         r#"
-        local math = require 'math'
-        print(string.format('sum: %d', math:sum(2, 2)))
+        local printf = function(...) print(string.format(...)) end
+        local Person = require 'person'
+        local paulo = Person.new('Paulo')
+        print(paulo:get_name())
+        paulo = nil
+        collectgarbage("collect")
+        print('after')
+        return true
         "#,
     )
-    .ok();
+    .unwrap();
 
     // lua.set_global("math", math);
 
