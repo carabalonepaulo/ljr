@@ -13,6 +13,17 @@ macro_rules! lua_error {
     }};
 }
 
+pub fn check_arg_count(ptr: *mut sys::lua_State, expected: usize) {
+    let got = unsafe { luajit2_sys::lua_gettop(ptr) } as usize;
+    if got != expected {
+        let msg = format!(
+            "wrong number of arguments, expecting {}, got {}",
+            expected, got
+        );
+        lua_error!(ptr, msg);
+    }
+}
+
 pub fn from_lua<T: crate::from_lua::FromLua>(
     ptr: *mut sys::lua_State,
     idx: &mut i32,

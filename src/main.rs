@@ -1,4 +1,4 @@
-use ljr::{UserData, lua::Lua};
+use ljr::{UserData, lua::Lua, lua_ref::LuaRef};
 use luajit2_sys as sys;
 use macros::user_data;
 
@@ -7,16 +7,16 @@ struct Person(String);
 #[user_data]
 impl Person {
     fn get_name(&self) -> String {
-        println!("clonou nome");
         self.0.clone()
     }
 
-    fn greet(&self, other: &Person) {}
-}
+    fn greet(&self, other: &Person) {
+        println!("hello my friend {}, i'm {}", other.0, self.0);
+    }
 
-impl Drop for Person {
-    fn drop(&mut self) {
-        println!("person drop");
+    fn change_name(&self, other: &mut Person, new_name: String) {
+        println!("change name");
+        other.0 = new_name;
     }
 }
 
@@ -37,19 +37,26 @@ fn main() {
     // lua.register("math", Math::new());
     lua.register("person", PersonFactory);
 
-    lua.do_string::<bool>(
+    match lua.do_string::<bool>(
         r#"
-        local printf = function(...) print(string.format(...)) end
         local Person = require 'person'
+
         local paulo = Person.new('Paulo')
         print(paulo:get_name())
-        paulo = nil
-        collectgarbage("collect")
-        print('after')
+        
+        local soreto = Person.new('Soreto')
+        paulo:greet(soreto)
+        print(soreto:get_name())
+
+        soreto:change_name(paulo, "Soretinho")
+        print(paulo:get_name())
+
         return true
         "#,
-    )
-    .unwrap();
+    ) {
+        Ok(_) => {}
+        Err(e) => eprintln!("{}", e),
+    }
 
     // lua.set_global("math", math);
 
