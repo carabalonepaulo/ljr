@@ -1,4 +1,4 @@
-use ljr::{UserData, lua::Lua, stack_str::StackStr, table::Table};
+use ljr::{UserData, lua::Lua, table::Table};
 use luajit2_sys as sys;
 use macros::user_data;
 
@@ -58,8 +58,18 @@ struct Test;
 
 #[user_data]
 impl Test {
-    fn test_with_str(first: StackStr) {
-        println!("first: {}", first.as_str());
+    fn create_table(lua: &Lua) -> Table {
+        let table = lua.create_table();
+        table.with(|t| {
+            t.push(213i32);
+            t.push(10923i32);
+            t.push("hello world");
+        });
+        table
+    }
+
+    fn test_with_str(first: &str) {
+        println!("first: {}", first);
     }
 
     fn get_from_table(table: Table) {
@@ -80,12 +90,15 @@ fn main() {
 
     lua.do_string::<bool>(
         r#"
-        local value = { [false] = "sumba", ["hello"] = "world" , [12] = "hello", sorvete = "vanilla" }
         local test = require "test"
-        test.get_from_table(value)
+        local t = test.create_table()
+        for i, v in ipairs(t) do print(i, v) end
+        
+        --local value = { [false] = "sumba", ["hello"] = "world" , [12] = "hello", sorvete = "vanilla" }
+        --test.get_from_table(value)
         --print(value[1])
         
-        test.test_with_str(value.hello)
+        --test.test_with_str(value.hello)
 
         return true
         "#,

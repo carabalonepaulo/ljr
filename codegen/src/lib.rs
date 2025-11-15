@@ -1,12 +1,12 @@
 use proc_macro2::{Span, TokenStream, TokenTree};
-use quote::{format_ident, quote};
+use quote::{format_ident, quote, quote_spanned};
 use syn::LitInt;
 use venial::{FnParam, TypeExpr, parse_item};
 
-fn string_to_str_lit(value: String) -> TokenStream {
-    let lit = syn::LitStr::new(value.as_str(), Span::call_site());
-    quote! { #lit }
-}
+// fn string_to_str_lit(value: String) -> TokenStream {
+//     let lit = syn::LitStr::new(value.as_str(), Span::call_site());
+//     quote! { #lit }
+// }
 
 fn string_to_cstr_lit(value: String) -> TokenStream {
     let buf = value.as_bytes();
@@ -30,6 +30,17 @@ fn type_expr_is_ref(ty: &TypeExpr) -> bool {
     }
 }
 
+fn is_type(ty: &TypeExpr, expected: &str) -> bool {
+    if let Some(p) = ty.as_path() {
+        if let Some(seg) = p.segments.last() {
+            if seg.ident == expected {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 fn strip_ref(ty: &TypeExpr) -> Option<(TypeExpr, bool)> {
     let mut iter = ty.tokens.iter().peekable();
 
@@ -51,9 +62,19 @@ fn strip_ref(ty: &TypeExpr) -> Option<(TypeExpr, bool)> {
     }
 }
 
+macro_rules! try_or_return {
+    ($item:ident, $($body:tt)*) => {
+        match { $($body)* } {
+            Some(v) => v,
+            None => return $item,
+        }
+    };
+}
+
 pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream {
-    let parsed_item = parse_item(item.clone()).unwrap();
-    let impl_block = parsed_item.as_impl().unwrap();
+    let parsed_item = try_or_return!(item, parse_item(item.clone()).ok());
+    let impl_block = try_or_return!(item, parsed_item.as_impl());
+
     let ud_name = match impl_block.self_ty.tokens.first() {
         Some(TokenTree::Ident(ident)) => ident.to_string(),
         _ => panic!("invalid type identifier"),
@@ -88,23 +109,48 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
                     let is_ref = type_expr_is_ref(arg_ty);
                     if !is_ref {
-                        call_args.push(quote! { #arg_name });
-                        args.push(quote! {
+                        // if is_type(&arg_ty, "Lua") {
+                        //     let arg_name_tmp = format_ident!("{}_tmp", arg_name);
+                        //     call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                        //     args.push(quote_spanned! { arg_ty.span() =>
+                        //         let #arg_name_tmp = ljr::lua::Lua::from_ptr(ptr);
+                        //         let #arg_name = &#arg_name_tmp;
+                        //     });
+                        // } else {
+                        call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                        args.push(quote_spanned! { arg_ty.span() =>
                             let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str);
                         });
+                        // }
                     } else {
                         if let Some((inner, is_mut)) = strip_ref(arg_ty) {
-                            let arg_name_tmp = format_ident!("{}_tmp", arg_name);
-                            let ref_tk = if is_mut {
-                                quote! { &mut }
+                            if is_type(&inner, "Lua") {
+                                let arg_name_tmp = format_ident!("{}_tmp", arg_name);
+                                call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                                args.push(quote_spanned! { arg_ty.span() =>
+                                    let #arg_name_tmp = ljr::lua::Lua::from_ptr(ptr);
+                                    let #arg_name = &#arg_name_tmp;
+                                });
+                            } else if is_type(&inner, "str") {
+                                let arg_name_tmp = format_ident!("{}_tmp", arg_name);
+                                call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                                args.push(quote_spanned! { arg_ty.span() =>
+                                    let #arg_name_tmp = ljr::helper::from_lua::<ljr::stack_str::StackStr>(ptr, &mut idx, "&str");
+                                    let #arg_name = #arg_name_tmp.as_str();
+                                });
                             } else {
-                                quote! { & }
-                            };
-                            call_args.push(quote! { #arg_name });
-                            args.push(quote! {
-                                let mut #arg_name_tmp = ljr::helper::from_lua_stack_ref::<#inner>(ptr, &mut idx);
-                                let #arg_name = #ref_tk *#arg_name_tmp;
-                            });
+                                let arg_name_tmp = format_ident!("{}_tmp", arg_name);
+                                let ref_tk = if is_mut {
+                                    quote! { &mut }
+                                } else {
+                                    quote! { & }
+                                };
+                                call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                                args.push(quote_spanned! { arg_ty.span() =>
+                                    let mut #arg_name_tmp = ljr::helper::from_lua_stack_ref::<#inner>(ptr, &mut idx);
+                                    let #arg_name = #ref_tk *#arg_name_tmp;
+                                });
+                            }
                         }
                     }
                 }
@@ -133,7 +179,28 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
             })
         };
 
-        let expected_args = LitInt::new(format!("{}", m.params.len()).as_str(), Span::call_site());
+        let args_c = m.params.iter()
+            .filter(|p| {
+                match &p.0 {
+                    FnParam::Receiver(_) => true,
+                    FnParam::Typed(ty) => {
+                        let arg_ty = &ty.ty;
+
+                        let is_ref = type_expr_is_ref(arg_ty);
+                        if is_ref {
+                            if let Some((inner, _)) = strip_ref(arg_ty) {
+                                !is_type(&inner, "Lua")
+                            } else {
+                                false
+                            }
+                        } else {
+                            true
+                        }
+                    },
+                }
+            }).count();
+
+        let expected_args = LitInt::new(format!("{}", args_c).as_str(), Span::call_site());
         quote! {
             sys::luaL_Reg {
                 name: #method_name.as_ptr() as _,
