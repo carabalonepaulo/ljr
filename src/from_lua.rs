@@ -2,7 +2,7 @@ use std::ffi::CStr;
 
 use luajit2_sys as sys;
 
-use crate::{UserData, lua_ref::LuaRef, stack_ref::StackRef};
+use crate::{UserData, lua_ref::LuaRef, stack_ref::StackRef, stack_str::StackStr, table::Table};
 
 pub trait FromLua {
     type Output;
@@ -66,12 +66,14 @@ impl FromLua for String {
     type Output = String;
 
     fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
-        if unsafe { sys::lua_isstring(ptr, idx) != 0 } {
-            let ptr = unsafe { sys::lua_tostring(ptr, idx) };
-            let cstr = unsafe { CStr::from_ptr(ptr) };
-            Some(cstr.to_str().ok()?.to_string())
-        } else {
-            None
+        unsafe {
+            if sys::lua_type(ptr, idx) == sys::LUA_TSTRING as i32 {
+                let ptr = sys::lua_tostring(ptr, idx);
+                let cstr = CStr::from_ptr(ptr);
+                Some(cstr.to_str().ok()?.to_string())
+            } else {
+                None
+            }
         }
     }
 }
@@ -107,22 +109,6 @@ where
     }
 }
 
-impl FromLua for () {
-    type Output = ();
-
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
-        if unsafe { sys::lua_isnone(ptr, idx) } != 0 {
-            Some(())
-        } else {
-            None
-        }
-    }
-
-    fn len() -> i32 {
-        0
-    }
-}
-
 impl<T: UserData> FromLua for LuaRef<T> {
     type Output = LuaRef<T>;
 
@@ -152,6 +138,30 @@ impl<T: UserData> FromLua for LuaRef<T> {
             sys::lua_pop(ptr, 2);
 
             Some(LuaRef::new(ptr))
+        }
+    }
+}
+
+impl FromLua for Table {
+    type Output = Table;
+
+    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+        if unsafe { sys::lua_istable(ptr, idx) } != 0 {
+            Some(Table::from_stack(ptr, idx))
+        } else {
+            None
+        }
+    }
+}
+
+impl FromLua for StackStr {
+    type Output = StackStr;
+
+    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+        if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
+            StackStr::new(ptr, idx).ok()
+        } else {
+            None
         }
     }
 }

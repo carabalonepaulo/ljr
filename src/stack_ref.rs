@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 
 use crate::{UserData, from_lua::FromLua};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct StackRef<T: FromLua + UserData> {
     ptr: *mut sys::lua_State,
     idx: i32,

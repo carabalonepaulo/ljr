@@ -1,6 +1,8 @@
 use luajit2_sys as sys;
 
-use crate::{AnyLuaFunction, AnyNativeFunction, AnyUserData, Coroutine, LightUserData, Nil, Table};
+use crate::{
+    AnyLuaFunction, AnyNativeFunction, AnyUserData, Coroutine, LightUserData, Nil, table::Table,
+};
 
 pub trait IsType {
     fn is_type(ptr: *mut sys::lua_State, idx: i32) -> bool;

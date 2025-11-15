@@ -3,8 +3,8 @@ use std::fmt::Display;
 use luajit2_sys as sys;
 
 use crate::{
-    AnyLuaFunction, AnyNativeFunction, AnyUserData, Coroutine, LightUserData, Nil, Table,
-    from_lua::FromLua, is_type::IsType, to_lua::ToLua,
+    AnyLuaFunction, AnyNativeFunction, AnyUserData, Coroutine, LightUserData, Nil,
+    from_lua::FromLua, is_type::IsType, table::Table, to_lua::ToLua,
 };
 
 #[derive(Debug)]
