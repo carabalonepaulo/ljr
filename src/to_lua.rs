@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+
 use luajit2_sys as sys;
 
 use crate::{Nil, UserData, lua_ref::LuaRef, table::Table};
@@ -57,13 +59,13 @@ where
     T: UserData,
 {
     fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {
-        let size = std::mem::size_of::<*mut T>();
+        let size = std::mem::size_of::<*mut RefCell<T>>();
         let name = T::name();
         let methods = T::functions();
-        let self_ptr = Box::into_raw(Box::new(self));
+        let self_ptr = Box::into_raw(Box::new(RefCell::new(self)));
 
         unsafe {
-            let managed_ptr = sys::lua_newuserdata(ptr, size) as *mut *mut T;
+            let managed_ptr = sys::lua_newuserdata(ptr, size) as *mut *mut RefCell<T>;
             *managed_ptr = self_ptr;
 
             if sys::luaL_newmetatable(ptr, name) != 0 {
@@ -74,7 +76,7 @@ where
 
                 unsafe extern "C" fn __gc<T: UserData>(ptr: *mut luajit2_sys::lua_State) -> i32 {
                     unsafe {
-                        let ud_ptr = sys::lua_touserdata(ptr, 1) as *mut *mut T;
+                        let ud_ptr = sys::lua_touserdata(ptr, 1) as *mut *mut RefCell<T>;
                         if !ud_ptr.is_null() && !(*ud_ptr).is_null() {
                             std::mem::drop(Box::from_raw(*ud_ptr));
                         }

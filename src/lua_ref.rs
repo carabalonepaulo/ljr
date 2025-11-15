@@ -1,4 +1,8 @@
-use std::{marker::PhantomData, rc::Rc};
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    marker::PhantomData,
+    rc::Rc,
+};
 
 use crate::UserData;
 
@@ -33,28 +37,48 @@ impl<T: UserData> LuaRef<T> {
         self.inner.id
     }
 
-    pub fn as_ref(&self) -> &T {
+    pub fn as_ref(&self) -> Ref<'_, T> {
         let ptr = self.inner.ptr;
         let id = self.inner.id;
 
         unsafe {
             luajit2_sys::lua_rawgeti(ptr, luajit2_sys::LUA_REGISTRYINDEX, id);
-            let ud_ptr = luajit2_sys::lua_touserdata(ptr, -1) as *const *const T;
+            let ud_ptr = luajit2_sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
             luajit2_sys::lua_pop(ptr, 1);
-            &**ud_ptr
+
+            let cell: &RefCell<T> = &**ud_ptr;
+            cell.borrow()
         }
     }
 
-    pub fn as_mut(&mut self) -> &mut T {
+    pub fn as_mut(&mut self) -> RefMut<'_, T> {
         let ptr = self.inner.ptr;
         let id = self.inner.id;
 
         unsafe {
             luajit2_sys::lua_rawgeti(ptr, luajit2_sys::LUA_REGISTRYINDEX, id);
-            let ud_ptr = luajit2_sys::lua_touserdata(ptr, -1) as *mut *mut T;
+            let ud_ptr = luajit2_sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
             luajit2_sys::lua_pop(ptr, 1);
-            &mut **ud_ptr
+
+            let cell: &RefCell<T> = &**ud_ptr;
+            cell.borrow_mut()
         }
+    }
+
+    pub fn with<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        let guard = self.as_ref();
+        f(&*guard)
+    }
+
+    pub fn with_mut<F, R>(&mut self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut guard = self.as_mut();
+        f(&mut *guard)
     }
 }
 

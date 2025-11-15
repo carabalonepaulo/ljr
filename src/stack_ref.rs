@@ -1,5 +1,8 @@
 use luajit2_sys as sys;
-use std::marker::PhantomData;
+use std::{
+    cell::{Ref, RefCell, RefMut},
+    marker::PhantomData,
+};
 
 use crate::{UserData, from_lua::FromLua};
 
@@ -18,24 +21,38 @@ impl<T: FromLua + UserData> StackRef<T> {
             marker: PhantomData,
         }
     }
-}
 
-impl<T: FromLua + UserData> std::ops::Deref for StackRef<T> {
-    type Target = T;
-
-    fn deref(&self) -> &Self::Target {
+    pub fn borrow(&self) -> Ref<'_, T> {
         unsafe {
-            let ud_ptr = sys::lua_touserdata(self.ptr, self.idx) as *mut *mut T;
-            &*(*ud_ptr)
+            let ud_ptr =
+                luajit2_sys::lua_touserdata(self.ptr, self.idx) as *const *const RefCell<T>;
+            let cell: &RefCell<T> = &**ud_ptr;
+            cell.borrow()
         }
     }
-}
 
-impl<T: FromLua + UserData> std::ops::DerefMut for StackRef<T> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
+    pub fn borrow_mut(&self) -> RefMut<'_, T> {
         unsafe {
-            let ud_ptr = sys::lua_touserdata(self.ptr, self.idx) as *mut *mut T;
-            &mut *(*ud_ptr)
+            let ud_ptr =
+                luajit2_sys::lua_touserdata(self.ptr, self.idx) as *const *const RefCell<T>;
+            let cell: &RefCell<T> = &**ud_ptr;
+            cell.borrow_mut()
         }
+    }
+
+    pub fn with<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&T) -> R,
+    {
+        let guard = self.borrow();
+        f(&*guard)
+    }
+
+    pub fn with_mut<F, R>(&self, f: F) -> R
+    where
+        F: FnOnce(&mut T) -> R,
+    {
+        let mut guard = self.borrow_mut();
+        f(&mut *guard)
     }
 }

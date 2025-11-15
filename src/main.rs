@@ -1,4 +1,4 @@
-use ljr::{UserData, lua::Lua, table::Table};
+use ljr::{UserData, lua::Lua, lua_ref::LuaRef, table::Table};
 use luajit2_sys as sys;
 use macros::user_data;
 
@@ -35,6 +35,10 @@ use macros::user_data;
 //     fn change_name(&self, other: &mut Person, new_name: String) {
 //         println!("change name");
 //         other.name = new_name;
+//     }
+
+//     fn should_panic(&self, other: &mut Person) {
+//         println!("unreach");
 //     }
 // }
 
@@ -93,11 +97,11 @@ fn main() {
         local test = require "test"
         local t = test.create_table()
         for i, v in ipairs(t) do print(i, v) end
-        
+
         --local value = { [false] = "sumba", ["hello"] = "world" , [12] = "hello", sorvete = "vanilla" }
         --test.get_from_table(value)
         --print(value[1])
-        
+
         --test.test_with_str(value.hello)
 
         return true
@@ -110,20 +114,16 @@ fn main() {
     //     local Person = require 'person'
 
     //     local paulo = Person.new('Paulo')
-    //     print(paulo:get_name())
+    //     paulo:should_panic(paulo)
 
-    //     local soreto = Person.new('Soreto')
-    //     paulo:greet(soreto)
-    //     print(soreto:get_name())
+    //     --print(paulo:get_name())
 
-    //     soreto:change_name(paulo, "Soretinho")
-    //     print(paulo:get_name())
+    //     --local soreto = Person.new('Soreto')
+    //     --paulo:greet(soreto)
+    //     --print(soreto:get_name())
 
-    //     print('-------------')
-    //     soreto:external_ref(Person.new('Sorvete'))
-    //     collectgarbage("collect")
-    //     print(soreto:get_other_name())
-    //     print(soreto:get_name2())
+    //     --soreto:change_name(paulo, "Soretinho")
+    //     --print(paulo:get_name())
 
     //     return true
     //     "#,
@@ -131,6 +131,12 @@ fn main() {
     //     Ok(_) => {}
     //     Err(e) => eprintln!("{}", e),
     // }
+
+    //  print('-------------')
+    //     soreto:external_ref(Person.new('Sorvete'))
+    //     collectgarbage("collect")
+    //     print(soreto:get_other_name())
+    //     print(soreto:get_name2())
 
     {
         let stack = lua.stack();

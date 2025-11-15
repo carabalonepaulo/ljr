@@ -31,7 +31,7 @@ pub fn from_lua<T: crate::from_lua::FromLua>(
 ) -> T::Output {
     match <T as crate::from_lua::FromLua>::from_lua(ptr, *idx) {
         Some(value) => {
-            *idx += T::len();
+            *idx -= T::len();
             value
         }
         None => {
@@ -50,7 +50,7 @@ where
 {
     match <T as crate::from_lua::FromLua>::from_lua(ptr, *idx) {
         Some(value) => {
-            *idx += <T as crate::from_lua::FromLua>::len();
+            *idx -= <T as crate::from_lua::FromLua>::len();
             value
         }
         None => {
