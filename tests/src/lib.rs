@@ -344,3 +344,74 @@ fn test_create_ref() {
     let value = lua.do_string::<bool>("return test_value:get_value() == 123");
     assert_eq!(value, Ok(true));
 }
+
+#[test]
+fn test_ud_fn_wrong_arg_count_error() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+    struct Test;
+    #[user_data]
+    impl Test {
+        fn sum(a: i32, b: i32) -> i32 {
+            a + b
+        }
+    }
+    lua.register("test", Test);
+    let value = lua.do_string::<i32>("local test = require 'test'; return test.sum(10)"); // Apenas 1 argumento
+    let err_msg = "wrong number of arguments";
+    assert!(matches!(value, Err(Error::LuaError(msg)) if msg.contains(err_msg)));
+}
+
+#[test]
+fn test_ud_fn_wrong_arg_type_error() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+    struct Test;
+    #[user_data]
+    impl Test {
+        fn sum(a: i32, b: i32) -> i32 {
+            a + b
+        }
+    }
+    lua.register("test", Test);
+    let value = lua.do_string::<i32>("local test = require 'test'; return test.sum(10, 'hello')"); // String em vez de i32
+    assert!(matches!(value, Err(Error::LuaError(msg)) if msg.contains("invalid argument")));
+}
+
+#[test]
+fn test_table_iter_ipairs() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let table = lua.create_table();
+    table.with(|t| {
+        t.push(10i32);
+        t.push(20i32);
+        t.push(30i32);
+    });
+
+    let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
+
+    assert_eq!(values, vec![10, 20, 30]);
+}
+
+#[test]
+fn test_table_iter_pairs() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let table = lua.create_table();
+    table.with(|t| {
+        t.push(10i32);
+        t.set("name".to_string(), "Alice".to_string());
+        t.push(20i32);
+        t.set(false, 123i32);
+        t.push(30i32);
+    });
+
+    let values: Vec<(String, String)> = table.with(|t| t.pairs::<String, String>().collect());
+    let mut expected = vec![("name".to_string(), "Alice".to_string())];
+    expected.sort_unstable();
+
+    assert_eq!(values, expected);
+}
