@@ -270,8 +270,7 @@ fn test_table() {
         t.push(false);
         t.push("hello world");
 
-        // TODO: &str as key
-        t.set("name".to_string(), "soreto");
+        t.set("name", "soreto");
     });
     lua.register("value", table);
 
