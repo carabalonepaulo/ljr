@@ -9,6 +9,32 @@ fn test_do_string_return_num() {
 }
 
 #[test]
+fn test_do_string_return_bool() {
+    let mut lua = Lua::new();
+    let value = lua.do_string::<bool>("return true");
+    assert_eq!(value, Ok(true));
+
+    let value = lua.do_string::<bool>("return false");
+    assert_eq!(value, Ok(false));
+}
+
+#[test]
+fn test_do_string_return_f32() {
+    let mut lua = Lua::new();
+    let value = lua.do_string::<f32>("return 3.14");
+    assert!(value.is_ok());
+    assert!((value.unwrap() - 3.14).abs() < f32::EPSILON);
+}
+
+#[test]
+fn test_do_string_return_f64() {
+    let mut lua = Lua::new();
+    let value = lua.do_string::<f64>("return 1.23456789");
+    assert!(value.is_ok());
+    assert!((value.unwrap() - 1.23456789).abs() < f64::EPSILON);
+}
+
+#[test]
 fn test_do_string_return_string() {
     let mut lua = Lua::new();
     let value = lua.do_string::<String>("return 'hello world'");
