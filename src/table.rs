@@ -1,6 +1,6 @@
 use std::{marker::PhantomData, rc::Rc};
 
-use crate::{defer, from_lua::FromLua, to_lua::ToLua};
+use crate::{defer, from_lua::FromLua, lua_str::LuaStr, to_lua::ToLua};
 use luajit2_sys as sys;
 
 #[derive(Debug)]
@@ -125,6 +125,25 @@ impl TableRef {
         val
     }
 
+    pub fn clear(&mut self) {
+        let ptr = self.0;
+        let idx = self.1;
+
+        unsafe {
+            sys::lua_pushnil(ptr);
+            while sys::lua_next(ptr, idx) != 0 {
+                sys::lua_pop(ptr, 1);
+                sys::lua_pushvalue(ptr, -1);
+                sys::lua_pushnil(ptr);
+                sys::lua_settable(ptr, idx);
+            }
+        }
+    }
+
+    pub fn len(&self) -> usize {
+        unsafe { sys::lua_objlen(self.0, self.1) }
+    }
+
     pub fn ipairs<'a, T: FromLua>(&'a mut self) -> Ipairs<'a, T> {
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         Ipairs {
@@ -172,7 +191,11 @@ impl Table {
         len
     }
 
-    pub fn with<F, R>(&self, f: F) -> R
+    pub fn clear(&mut self) {
+        self.with(|t| t.clear());
+    }
+
+    pub fn with<F, R>(&mut self, f: F) -> R
     where
         F: FnOnce(&mut TableRef) -> R,
     {
@@ -196,4 +219,4 @@ macro_rules! impl_table_key {
     }
 }
 
-impl_table_key!(i32, f32, f64, bool, String);
+impl_table_key!(i32, f32, f64, bool, String, LuaStr);

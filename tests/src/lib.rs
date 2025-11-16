@@ -1,4 +1,5 @@
 mod option;
+mod str;
 
 #[cfg(test)]
 use ljr::prelude::*;
@@ -263,7 +264,7 @@ fn test_table() {
     let mut lua = Lua::new();
     lua.open_libs();
 
-    let table = lua.create_table();
+    let mut table = lua.create_table();
     table.with(|t| {
         t.push(10i32);
         t.push(false);
@@ -292,7 +293,7 @@ fn test_ud_table_arg() {
 
     #[user_data]
     impl Test {
-        fn use_table(table: Table) {
+        fn use_table(mut table: Table) {
             table.with(|t| {
                 t.set(false, 123);
             })
@@ -411,7 +412,7 @@ fn test_table_iter_ipairs() {
     let lua = Lua::new();
     lua.open_libs();
 
-    let table = lua.create_table();
+    let mut table = lua.create_table();
     table.with(|t| {
         t.push(10i32);
         t.push(20i32);
@@ -428,7 +429,7 @@ fn test_table_iter_pairs() {
     let lua = Lua::new();
     lua.open_libs();
 
-    let table = lua.create_table();
+    let mut table = lua.create_table();
     table.with(|t| {
         t.push(10i32);
         t.set("name".to_string(), "Alice".to_string());
@@ -449,7 +450,7 @@ fn test_create_table_with_macros() {
     let lua = Lua::new();
     lua.open_libs();
 
-    let table = create_table!(lua, {
+    let mut table = create_table!(lua, {
         "hello",
         "world",
         10,
@@ -493,4 +494,24 @@ fn test_create_table_with_macros() {
         values.sort_unstable();
         assert_eq!(&values, &[10, 20, 30]);
     }
+}
+
+#[test]
+fn test_table_clear() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, {
+        "hello",
+        "world",
+        10,
+        20,
+        30,
+        true,
+        false
+    });
+    assert_eq!(table.len(), 7);
+    assert_eq!(table.with(|t| t.len()), 7);
+    table.with(|t| t.clear());
+    assert_eq!(table.len(), 0);
 }

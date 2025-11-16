@@ -6,6 +6,7 @@ pub mod lua;
 pub mod stack;
 
 pub mod lua_ref;
+pub mod lua_str;
 pub mod stack_ref;
 pub mod stack_str;
 pub mod table;
@@ -40,6 +41,7 @@ pub mod prelude {
     pub use crate::error::Error;
     pub use crate::lua::Lua;
     pub use crate::lua_ref::LuaRef;
+    pub use crate::lua_str::LuaStr;
     pub use crate::table::Table;
     pub use macros::user_data;
 }
@@ -47,7 +49,7 @@ pub mod prelude {
 #[macro_export]
 macro_rules! create_table {
     ($lua:expr, { $($item:tt)* }) => {{
-        let table = $lua.create_table();
+        let mut table = $lua.create_table();
         table.with(|t| {
             create_table!(0, t, $($item)*);
         });
@@ -61,8 +63,12 @@ macro_rules! create_table {
         create_table!(0, $table, $($rest)*);
     };
 
+    ($n:literal, $table:expr, $value:expr) => { $table.push($value); };
+
     ($n:literal, $table:expr, $key:expr => $value:expr, $($rest:tt)*) => {
         $table.set($key, $value);
         create_table!(0, $table, $($rest)*);
-    }
+    };
+
+    ($n:literal, $table:expr, $key:expr => $value:expr) => { $table.set($key, $value); }
 }
