@@ -127,6 +127,10 @@ where
             None => unsafe { sys::lua_pushnil(ptr) },
         }
     }
+
+    fn len() -> i32 {
+        <T as ToLua>::len()
+    }
 }
 
 generate_to_lua_tuple_impl!();

@@ -178,6 +178,7 @@ impl FromLua for () {
 impl<T> FromLua for Option<T>
 where
     T: FromLua,
+    T::Output: FromLua,
 {
     type Output = Option<T::Output>;
 
@@ -187,6 +188,10 @@ where
         } else {
             <T as FromLua>::from_lua(ptr, idx).map(Some)
         }
+    }
+
+    fn len() -> i32 {
+        <T as FromLua>::Output::len()
     }
 }
 
