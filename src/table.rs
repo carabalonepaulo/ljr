@@ -1,4 +1,4 @@
-use std::{marker::PhantomData, rc::Rc};
+use std::{collections::HashMap, marker::PhantomData, rc::Rc};
 
 use crate::{defer, from_lua::FromLua, lua_str::LuaStr, to_lua::ToLua};
 use luajit2_sys as sys;
@@ -193,6 +193,21 @@ impl Table {
 
     pub fn clear(&mut self) {
         self.with(|t| t.clear());
+    }
+
+    pub fn extend_from_slice<T: ToLua + Clone>(&mut self, src: &[T]) {
+        self.with(|t| {
+            src.iter().for_each(|v| t.push(v.clone()));
+        });
+    }
+
+    pub fn extend_from_map<'a, K: TableKey<'a> + Clone, V: FromLua + ToLua + Clone>(
+        &mut self,
+        src: &HashMap<K, V>,
+    ) {
+        self.with(|t| {
+            src.iter().for_each(|(k, v)| t.set(k.clone(), v.clone()));
+        });
     }
 
     pub fn with<F, R>(&mut self, f: F) -> R

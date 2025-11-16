@@ -581,3 +581,37 @@ fn test_fn_ref() {
     );
     assert!(matches!(result, Ok((16, true))));
 }
+
+#[test]
+fn test_table_extend_from_slice() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, {});
+    assert_eq!(table.len(), 0);
+
+    table.extend_from_slice(&[10, 20, 30]);
+    assert_eq!(table.len(), 3);
+
+    table.clear();
+    assert_eq!(table.len(), 0);
+}
+
+#[test]
+fn test_table_extend_from_map() {
+    use std::collections::HashMap;
+
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut map: HashMap<String, bool> = HashMap::new();
+    map.insert("hello".to_string(), false);
+    map.insert("world".to_string(), true);
+
+    let mut table = create_table!(lua, {});
+    table.extend_from_map(&map);
+
+    let mut values: Vec<(String, bool)> = table.with(|t| t.pairs::<String, bool>().collect());
+    values.sort_unstable();
+    assert_eq!(&values, &[("hello".into(), false), ("world".into(), true)]);
+}
