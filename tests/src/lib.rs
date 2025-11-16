@@ -432,7 +432,7 @@ fn test_table_iter_pairs() {
     let mut table = lua.create_table();
     table.with(|t| {
         t.push(10i32);
-        t.set("name".to_string(), "Alice".to_string());
+        t.set("name", "Alice");
         t.push(20i32);
         t.set(false, 123i32);
         t.push(30i32);
@@ -459,9 +459,9 @@ fn test_create_table_with_macros() {
         true,
         false,
 
-        "name".to_string() => "Alice".to_string(),
+        "name" => "Alice",
         12 => false,
-        true => "ulala".to_string(),
+        true => "ulala",
     });
 
     assert_eq!(table.len(), 7);
