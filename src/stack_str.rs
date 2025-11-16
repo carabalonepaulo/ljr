@@ -7,7 +7,7 @@ pub struct StackStr(*mut sys::lua_State, i32);
 impl StackStr {
     pub fn new(ptr: *mut sys::lua_State, idx: i32) -> Result<Self, Utf8Error> {
         unsafe {
-            let ptr = sys::lua_tostring(ptr, -1);
+            let ptr = sys::lua_tostring(ptr, idx);
             let cstr = CStr::from_ptr(ptr);
             let _ = cstr.to_str()?;
         }

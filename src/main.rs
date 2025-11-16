@@ -2,55 +2,55 @@ use ljr::{UserData, lua::Lua, lua_ref::LuaRef, table::Table};
 use luajit2_sys as sys;
 use macros::user_data;
 
-// struct Person {
-//     name: String,
-//     other: Option<LuaRef<Person>>,
-// }
+struct Person {
+    name: String,
+    other: Option<LuaRef<Person>>,
+}
 
-// #[user_data]
-// impl Person {
-//     fn get_name(&self) -> String {
-//         self.name.clone()
-//     }
+#[user_data]
+impl Person {
+    fn get_name(&self) -> String {
+        self.name.clone()
+    }
 
-//     fn get_name2(me: LuaRef<Person>) -> String {
-//         me.as_ref().name.clone()
-//     }
+    fn get_name2(me: LuaRef<Person>) -> String {
+        me.as_ref().name.clone()
+    }
 
-//     fn get_other_name(&self) -> String {
-//         self.other
-//             .as_ref()
-//             .map(|o| o.as_ref().name.clone())
-//             .unwrap_or_default()
-//     }
+    fn get_other_name(&self) -> String {
+        self.other
+            .as_ref()
+            .map(|o| o.as_ref().name.clone())
+            .unwrap_or_default()
+    }
 
-//     fn external_ref(&mut self, other: LuaRef<Person>) {
-//         self.other = Some(other.clone());
-//     }
+    fn external_ref(&mut self, other: LuaRef<Person>) {
+        self.other = Some(other.clone());
+    }
 
-//     fn greet(&self, other: &Person) {
-//         println!("hello my friend {}, i'm {}", other.name, self.name);
-//     }
+    fn greet(&self, other: &Person) {
+        println!("hello my friend {}, i'm {}", other.name, self.name);
+    }
 
-//     fn change_name(&self, other: &mut Person, new_name: String) {
-//         println!("change name");
-//         other.name = new_name;
-//     }
+    fn change_name(&self, other: &mut Person, new_name: &str) {
+        println!("change name");
+        other.name = new_name.into();
+    }
 
-//     fn should_panic(&self, other: &mut Person) {
-//         println!("unreach");
-//     }
-// }
+    fn should_panic(&self, other: &mut Person) {
+        println!("unreach");
+    }
+}
 
-// struct PersonFactory;
+struct PersonFactory;
 
-// #[user_data]
-// impl PersonFactory {
-//     fn new(name: String) -> Person {
-//         println!("criou nome {}", name);
-//         Person { name, other: None }
-//     }
-// }
+#[user_data]
+impl PersonFactory {
+    fn new(name: String) -> Person {
+        println!("criou nome {}", name);
+        Person { name, other: None }
+    }
+}
 
 struct Test;
 // t.push(10i32);
@@ -60,77 +60,97 @@ struct Test;
 // t.ipairs::<i32>()
 //     .for_each(|v| println!("ipairs value: {:?}", v));
 
-#[user_data]
-impl Test {
-    fn create_table(lua: &Lua) -> Table {
-        let table = lua.create_table();
-        table.with(|t| {
-            t.push(213i32);
-            t.push(10923i32);
-            t.push("hello world");
-        });
-        table
-    }
+// #[user_data]
+// impl Test {
+//     fn create_table(lua: &Lua) -> Table {
+//         let table = lua.create_table();
+//         table.with(|t| {
+//             t.push(213i32);
+//             t.push(10923i32);
+//             t.push("hello world");
+//         });
+//         table
+//     }
 
-    fn test_with_str(first: &str) {
-        println!("first: {}", first);
-    }
+//     fn test_with_str(first: &str) {
+//         println!("first: {}", first);
+//     }
 
-    fn get_from_table(table: Table) {
-        table.with(|t| {
-            t.pairs::<String, String>()
-                .for_each(|(k, v)| println!("{}: {}", k, v));
-        });
-    }
-}
+//     fn get_from_table(table: Table) {
+//         table.with(|t| {
+//             t.pairs::<String, String>()
+//                 .for_each(|(k, v)| println!("{}: {}", k, v));
+//         });
+//     }
+// }
 
 fn main() {
     let mut lua = Lua::new();
     lua.open_libs();
 
+    // let table = lua.create_table();
+    // table.with(|t| {
+    //     t.set("hello".to_string(), "world");
+    //     t.set("uila".to_string(), "buba");
+    // });
+
+    // lua.register("custom_table", table);
+
+    // let x = lua
+    //     .do_string::<bool>(
+    //         r#"
+    //     local t = require 'custom_table'
+    //     for k, v in pairs(t) do print(k, v) end
+    //     return true
+    //     "#,
+    //     )
+    //     .unwrap();
+    // println!("{:?}", x);
+
     // lua.register("math", Math::new());
-    // lua.register("person", PersonFactory);
-    lua.register("test", Test);
+    lua.register("person", PersonFactory);
+    // lua.register("test", Test);
 
-    lua.do_string::<bool>(
-        r#"
-        local test = require "test"
-        local t = test.create_table()
-        for i, v in ipairs(t) do print(i, v) end
-
-        --local value = { [false] = "sumba", ["hello"] = "world" , [12] = "hello", sorvete = "vanilla" }
-        --test.get_from_table(value)
-        --print(value[1])
-
-        --test.test_with_str(value.hello)
-
-        return true
-        "#,
-    )
-    .unwrap();
-
-    // match lua.do_string::<bool>(
+    // lua.do_string::<bool>(
     //     r#"
-    //     local Person = require 'person'
+    //     local test = require "test"
+    //     local t = test.create_table()
+    //     for i, v in ipairs(t) do print(i, v) end
 
-    //     local paulo = Person.new('Paulo')
-    //     paulo:should_panic(paulo)
+    //     --local value = { [false] = "sumba", ["hello"] = "world" , [12] = "hello", sorvete = "vanilla" }
+    //     --test.get_from_table(value)
+    //     --print(value[1])
 
-    //     --print(paulo:get_name())
-
-    //     --local soreto = Person.new('Soreto')
-    //     --paulo:greet(soreto)
-    //     --print(soreto:get_name())
-
-    //     --soreto:change_name(paulo, "Soretinho")
-    //     --print(paulo:get_name())
+    //     --test.test_with_str(value.hello)
 
     //     return true
     //     "#,
-    // ) {
-    //     Ok(_) => {}
-    //     Err(e) => eprintln!("{}", e),
-    // }
+    // )
+    // .unwrap();
+
+    match lua.do_string::<bool>(
+        r#"
+        local Person = require 'person'
+
+        local paulo = Person.new('Paulo')
+        --paulo:should_panic(paulo)
+        --print(paulo:get_name2())
+
+        local soreto = Person.new('Soreto')
+        --paulo:greet(soreto)
+        --print(soreto:get_name())
+
+        --paulo:should_panic(soreto)
+
+        soreto:change_name(paulo, "Soretinho")
+        print(paulo:get_name())
+
+        return true
+        "#,
+    ) {
+        Ok(_) => {}
+        Err(e) => eprintln!("{}", e),
+    }
 
     //  print('-------------')
     //     soreto:external_ref(Person.new('Sorvete'))

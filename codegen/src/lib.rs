@@ -207,8 +207,8 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                 unreachable!();
             };
 
+            borrow_steps.push(quote! { #let_def ljr::helper::from_lua_stack_ref::<#receiver_ty>(ptr, &mut idx); });
             inner_most_block = quote! {
-                #let_def ljr::helper::from_lua_stack_ref::<#receiver_ty>(ptr, &mut idx);
                 ud_stack_ref.#borrow_method(|#receiver_name| {
                     #inner_most_block
                 })

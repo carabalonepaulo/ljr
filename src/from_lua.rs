@@ -165,3 +165,11 @@ impl FromLua for StackStr {
         }
     }
 }
+
+impl FromLua for () {
+    type Output = ();
+
+    fn from_lua(_: *mut luajit2_sys::lua_State, _: i32) -> Option<Self::Output> {
+        Some(())
+    }
+}

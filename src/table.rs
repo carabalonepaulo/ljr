@@ -161,7 +161,7 @@ impl Table {
         Self(Rc::new(Inner { ptr, id }))
     }
 
-    pub fn id(&self) -> i32 {
+    pub(crate) fn id(&self) -> i32 {
         self.0.id
     }
 
