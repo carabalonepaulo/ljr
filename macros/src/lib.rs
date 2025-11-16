@@ -4,3 +4,13 @@ use proc_macro::TokenStream;
 pub fn user_data(attr: TokenStream, item: TokenStream) -> TokenStream {
     codegen::generate_user_data(attr.into(), item.into()).into()
 }
+
+#[proc_macro]
+pub fn generate_to_lua_tuple_impl(attr: TokenStream) -> TokenStream {
+    codegen::tuple_impl::generate_to_lua_tuple_impl(attr.into()).into()
+}
+
+#[proc_macro]
+pub fn generate_from_lua_tuple_impl(attr: TokenStream) -> TokenStream {
+    codegen::tuple_impl::generate_from_lua_tuple_impl(attr.into()).into()
+}

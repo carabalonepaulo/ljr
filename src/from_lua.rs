@@ -1,6 +1,7 @@
 use std::ffi::CStr;
 
 use luajit2_sys as sys;
+use macros::generate_from_lua_tuple_impl;
 
 use crate::{UserData, lua_ref::LuaRef, stack_ref::StackRef, stack_str::StackStr, table::Table};
 
@@ -173,3 +174,5 @@ impl FromLua for () {
         Some(())
     }
 }
+
+generate_from_lua_tuple_impl!();

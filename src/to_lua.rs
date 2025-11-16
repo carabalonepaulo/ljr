@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 
 use luajit2_sys as sys;
+use macros::generate_to_lua_tuple_impl;
 
 use crate::{Nil, UserData, lua_ref::LuaRef, table::Table};
 
@@ -111,3 +112,5 @@ impl ToLua for Table {
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id()) };
     }
 }
+
+generate_to_lua_tuple_impl!();

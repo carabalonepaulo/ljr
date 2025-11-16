@@ -40,6 +40,10 @@ impl Person {
     fn should_panic(&self, other: &mut Person) {
         println!("unreach");
     }
+
+    fn recv_tupl(&self, values: (i32, i32)) -> (i32, i32) {
+        (values.0 * 2, values.1 * 2)
+    }
 }
 
 struct PersonFactory;
@@ -88,6 +92,8 @@ fn main() {
     let mut lua = Lua::new();
     lua.open_libs();
 
+    let x = <String as ljr::from_lua::FromLua>::len();
+
     // let table = lua.create_table();
     // table.with(|t| {
     //     t.set("hello".to_string(), "world");
@@ -133,17 +139,18 @@ fn main() {
         local Person = require 'person'
 
         local paulo = Person.new('Paulo')
+        print(paulo:recv_tupl(5, 10))
         --paulo:should_panic(paulo)
         --print(paulo:get_name2())
 
-        local soreto = Person.new('Soreto')
+        --local soreto = Person.new('Soreto')
         --paulo:greet(soreto)
         --print(soreto:get_name())
 
         --paulo:should_panic(soreto)
 
-        soreto:change_name(paulo, "Soretinho")
-        print(paulo:get_name())
+        --soreto:change_name(paulo, "Soretinho")
+        --print(paulo:get_name())
 
         return true
         "#,

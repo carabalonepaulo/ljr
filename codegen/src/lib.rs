@@ -1,6 +1,7 @@
+pub mod tuple_impl;
+
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{format_ident, quote, quote_spanned};
-use syn::LitInt;
 use venial::{FnParam, TypeExpr, parse_item};
 
 fn string_to_cstr_lit(value: String) -> TokenStream {
@@ -109,26 +110,41 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
             call_args.push(quote! { #receiver_name });
         }
 
-        let args_c = m.params.iter()
-            .filter(|p| {
-                match &p.0 {
-                    FnParam::Receiver(_) => true,
-                    FnParam::Typed(ty) => {
-                        let arg_ty = &ty.ty;
+        // let mut get_args_c: Vec<TokenStream> = vec![];
+        let arg_c = {
+            let len_expr_list: Vec<TokenStream> = m.params.iter()
+                .filter_map(|p| {
+                    match &p.0 {
+                        FnParam::Receiver(_) => Some(quote! { <#ud_ty as ljr::from_lua::FromLua>::len() }),
+                        FnParam::Typed(ty) => {
+                            let arg_ty = &ty.ty;
 
-                        let is_ref = type_expr_is_ref(arg_ty);
-                        if is_ref {
-                            if let Some((inner, _)) = strip_ref(arg_ty) {
-                                !is_type(&inner, "Lua")
+                            let is_ref = type_expr_is_ref(arg_ty);
+                            if is_ref {
+                                if let Some((inner, _)) = strip_ref(arg_ty) {
+                                    if is_type(&inner, "Lua") {
+                                        None
+                                    } else if is_type(&inner, "str") {
+                                        Some(quote! { <ljr::stack_str::StackStr as ljr::from_lua::FromLua>::len() })
+                                    } else {
+                                        Some(quote! { <#inner as ljr::from_lua::FromLua>::len() })
+                                    }
+                                } else {
+                                    None
+                                }
                             } else {
-                                false
+                                Some(quote! { <#arg_ty as ljr::from_lua::FromLua>::len() })
                             }
-                        } else {
-                            true
-                        }
-                    },
-                }
-            }).count();
+                        },
+                    }
+                }).collect();
+            
+            if len_expr_list.is_empty() {
+                quote! { 0 }
+            } else {
+                quote! { (#(#len_expr_list)+*) as usize }
+            }
+        };
 
         for param in m.params.iter() {
             if let FnParam::Typed(ty) = &param.0 {
@@ -227,13 +243,13 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
             })
         };
 
-        let expected_args = LitInt::new(format!("{}", args_c).as_str(), Span::call_site());
+        // let expected_args = LitInt::new(format!("{}", args_c).as_str(), Span::call_site());
         quote! {
             sys::luaL_Reg {
                 name: #method_name.as_ptr() as _,
                 func: {
                     unsafe extern "C" fn trampoline(ptr: *mut sys::lua_State) -> std::ffi::c_int {
-                        ljr::helper::check_arg_count(ptr, #expected_args);
+                        ljr::helper::check_arg_count(ptr, #arg_c);
                         #final_block
                     }
                     Some(trampoline)
