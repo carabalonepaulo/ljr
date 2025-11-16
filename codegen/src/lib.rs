@@ -95,22 +95,6 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
         let method_name = string_to_cstr_lit(m.name.to_string());
         let mut borrow_steps: Vec<TokenStream> = vec![];
 
-        let mut receiver_present = false;
-        let mut receiver_name = format_ident!("_");
-        let mut receiver_ty = quote! {};
-
-        if let Some(_) = m
-            .params
-            .iter()
-            .find(|p| matches!(&p.0, FnParam::Receiver(_)))
-        {
-            receiver_present = true;
-            receiver_name = format_ident!("ud_ref");
-            receiver_ty = quote! { #ud_ty };
-            call_args.push(quote! { #receiver_name });
-        }
-
-        // let mut get_args_c: Vec<TokenStream> = vec![];
         let arg_c = {
             let len_expr_list: Vec<TokenStream> = m.params.iter()
                 .filter_map(|p| {
@@ -147,91 +131,67 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
         };
 
         for param in m.params.iter() {
-            if let FnParam::Typed(ty) = &param.0 {
-                let arg_name = &ty.name;
-                let arg_ty = &ty.ty;
-                let is_ref = type_expr_is_ref(arg_ty);
+            match &param.0 {
+                FnParam::Typed(ty) => {
+                    let arg_name = &ty.name;
+                    let arg_ty = &ty.ty;
+                    let arg_name_str = type_expr_to_string(arg_ty);
+                    let is_ref = type_expr_is_ref(arg_ty);
 
-                if is_ref {
-                    if let Some((inner_ty, _)) = strip_ref(arg_ty) {
-                        if is_type(&inner_ty, "Lua") {
-                            call_args.push(quote_spanned! { arg_name.span() => &#arg_name });
-                        } else if is_type(&inner_ty, "str") {
-                            call_args.push(quote_spanned! { arg_name.span() => #arg_name.as_str() });
-                        } else {
-                            call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                    if !is_ref {
+                        call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                        borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                            let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str);
+                        })
+                    } else {
+                        if let Some((inner_ty, is_mut)) = strip_ref(arg_ty) {
+                            if is_type(&inner_ty, "Lua") {
+                                call_args.push(quote_spanned! { arg_name.span() => &#arg_name });
+                                borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                    let #arg_name = ljr::lua::Lua::from_ptr(ptr);
+                                });
+                            } else if is_type(&inner_ty, "str") {
+                                call_args.push(quote_spanned! { arg_name.span() => #arg_name.as_str() });
+                                borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                    let #arg_name = ljr::helper::from_lua::<ljr::stack_str::StackStr>(ptr, &mut idx, "&str");
+                                });
+                            } else {
+                                let (let_def, borrow_method, to_ref) = if is_mut {
+                                    (quote! { let mut }, quote! { borrow_mut }, quote! { &mut * })
+                                } else {
+                                    (quote! { let }, quote! { borrow }, quote! { &* })
+                                };
+                                let guard_tmp_name = format_ident!("{}_guard", arg_name);
+                                let arg_tmp_name = format_ident!("{}_tmp_ref", arg_name);
+
+                                call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                                borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                    let #guard_tmp_name = ljr::helper::from_lua_stack_ref::<#inner_ty>(ptr, &mut idx);
+                                    #let_def #arg_tmp_name = #guard_tmp_name.#borrow_method();
+                                    let #arg_name = #to_ref #arg_tmp_name;
+                                });
+                            }
                         }
                     }
-                } else {
-                    call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                },
+                FnParam::Receiver(ty) => {
+                    let receiver_ty = quote! { #ud_ty };
+                    call_args.push(quote! { __ud_ref });
+
+                    let (let_def, borrow_method, to_ref) = if ty.tk_mut.is_some() {
+                        (quote! { let mut }, quote! { borrow_mut }, quote! { &mut * })
+                    } else {
+                        (quote! { let }, quote! { borrow }, quote! { &* })
+                    };
+
+                    borrow_steps.push(quote! {
+                        let __ud_guard = ljr::helper::from_lua_stack_ref::<#receiver_ty>(ptr, &mut idx);
+                        #let_def __ud_tmp_ref = __ud_guard.#borrow_method();
+                        let __ud_ref = #to_ref __ud_tmp_ref;
+                    });
                 }
             }
         }
-
-        let mut inner_most_block = quote! {
-            #ud_ty::#fn_sym(#(#call_args),*)
-        };
-
-        for param in m.params.iter().rev() {
-            if let FnParam::Typed(ty) = &param.0 {
-                let arg_name = &ty.name;
-                let arg_ty = &ty.ty;
-                let arg_name_str = type_expr_to_string(arg_ty);
-                let is_ref = type_expr_is_ref(arg_ty);
-
-                if !is_ref {
-                    borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                        let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str);
-                    })
-                } else {
-                    if let Some((inner_ty, is_mut)) = strip_ref(arg_ty) {
-                        if is_type(&inner_ty, "Lua") {
-                            borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                let #arg_name = ljr::lua::Lua::from_ptr(ptr);
-                            });
-                        } else if is_type(&inner_ty, "str") {
-                            borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                let #arg_name = ljr::helper::from_lua::<ljr::stack_str::StackStr>(ptr, &mut idx, "&str");
-                            });
-                        } else {
-                            let borrow_method = if is_mut { quote! { with_mut } } else { quote! { with } };
-                            let arg_tmp_name = format_ident!("{}_stack_ref", arg_name);
-
-                            borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                let #arg_tmp_name = ljr::helper::from_lua_stack_ref::<#inner_ty>(ptr, &mut idx);
-                            });
-
-                            inner_most_block = quote! {
-                                #arg_tmp_name.#borrow_method(|#arg_name| {
-                                    #inner_most_block
-                                })
-                            };
-                        }
-                    }
-                }
-            }
-        }
-
-        if receiver_present {
-            let (let_def, borrow_method) = if let FnParam::Receiver(ref_ty) = &m.params.iter().find(|p| matches!(&p.0, FnParam::Receiver(_))).unwrap().0 {
-                if ref_ty.tk_mut.is_some() {
-                    (quote! { let mut ud_stack_ref = }, quote! { with_mut })
-                } else {
-                    (quote! { let ud_stack_ref = }, quote! { with })
-                }
-            } else {
-                unreachable!();
-            };
-
-            borrow_steps.push(quote! { #let_def ljr::helper::from_lua_stack_ref::<#receiver_ty>(ptr, &mut idx); });
-            inner_most_block = quote! {
-                ud_stack_ref.#borrow_method(|#receiver_name| {
-                    #inner_most_block
-                })
-            }
-        }
-
-        borrow_steps = borrow_steps.into_iter().rev().collect();
 
         let final_block = quote! {
             ljr::helper::catch(ptr, move || {
@@ -239,16 +199,15 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
                 #(#borrow_steps)*
 
-                #inner_most_block
+                #ud_ty::#fn_sym(#(#call_args),*)
             })
         };
 
-        // let expected_args = LitInt::new(format!("{}", args_c).as_str(), Span::call_site());
         quote! {
-            sys::luaL_Reg {
+            ljr::sys::luaL_Reg {
                 name: #method_name.as_ptr() as _,
                 func: {
-                    unsafe extern "C" fn trampoline(ptr: *mut sys::lua_State) -> std::ffi::c_int {
+                    unsafe extern "C" fn trampoline(ptr: *mut ljr::sys::lua_State) -> std::ffi::c_int {
                         ljr::helper::check_arg_count(ptr, #arg_c);
                         #final_block
                     }
@@ -266,15 +225,15 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
     quote! {
         #item
 
-        impl UserData for #ud_ty {
+        impl ljr::UserData for #ud_ty {
             fn name() -> *const i8 {
                 #ud_ty_name.as_ptr() as _
             }
 
-            fn functions() -> Vec<luajit2_sys::luaL_Reg> {
+            fn functions() -> Vec<ljr::sys::luaL_Reg> {
                 vec![
                     #reg_list
-                    sys::luaL_Reg {
+                    ljr::sys::luaL_Reg {
                         name: std::ptr::null(),
                         func: None,
                     }

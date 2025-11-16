@@ -1,0 +1,346 @@
+#[cfg(test)]
+use ljr::prelude::*;
+
+#[test]
+fn test_do_string_return_num() {
+    let mut lua = Lua::new();
+    let value = lua.do_string::<i32>("return 1");
+    assert!(matches!(value, Ok(1)));
+}
+
+#[test]
+fn test_do_string_return_string() {
+    let mut lua = Lua::new();
+    let value = lua.do_string::<String>("return 'hello world'");
+    assert!(matches!(value, Ok(ref s) if s == "hello world"));
+}
+
+#[test]
+fn test_do_string_error() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    let value = lua.do_string::<String>("error('error')");
+    let expected_err_msg = r#"[string "error('error')"]:1: error"#.to_string();
+    assert_eq!(value, Err(Error::LuaError(expected_err_msg)));
+}
+
+#[test]
+fn test_simple_user_data() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    struct Person;
+
+    #[user_data]
+    impl Person {}
+
+    lua.register("person", Person);
+}
+
+#[test]
+fn test_ud_simple_func() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test;
+
+    #[user_data]
+    impl Test {
+        fn sum(a: i32, b: i32) -> i32 {
+            a + b
+        }
+    }
+
+    lua.register("test", Test);
+
+    let value = lua.do_string::<i32>(
+        r#"
+        local test = require 'test'
+        return test.sum(10, 2)
+    "#,
+    );
+    assert!(matches!(value, Ok(12)));
+}
+
+#[test]
+fn test_ud_fn_tuple() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test;
+
+    #[user_data]
+    impl Test {
+        fn sum(v: (i32, i32)) -> (i32, bool) {
+            ((v.0 + v.1), false)
+        }
+    }
+
+    lua.register("test", Test);
+
+    let value = lua.do_string::<(i32, bool)>(
+        r#"
+        local test = require 'test'
+        return test.sum(10, 2)
+    "#,
+    );
+    assert!(matches!(value, Ok((12, false))));
+}
+
+#[test]
+fn test_ud_mut_self() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test {
+        value: i32,
+    }
+
+    #[user_data]
+    impl Test {
+        fn get_value(&self) -> i32 {
+            self.value
+        }
+
+        fn change(&mut self) {
+            self.value = 2190;
+        }
+    }
+
+    lua.register("test", Test { value: 0 });
+
+    let value = lua.do_string::<i32>(
+        r#"
+        local test = require 'test'
+        test:change()
+        return test:get_value()
+    "#,
+    );
+    assert!(matches!(value, Ok(2190)));
+}
+
+#[test]
+fn test_ud_ctor() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test {
+        value: i32,
+    }
+
+    #[user_data]
+    impl Test {
+        fn get_value(&self) -> i32 {
+            self.value
+        }
+    }
+
+    struct Factory;
+    #[user_data]
+    impl Factory {
+        fn new(value: i32) -> Test {
+            Test { value }
+        }
+    }
+
+    lua.register("test", Factory);
+
+    let value = lua.do_string::<bool>(
+        r#"
+        local Test = require 'test'
+        local a = Test.new(123)
+        return a:get_value() == 123
+    "#,
+    );
+    assert!(matches!(value, Ok(true)));
+}
+
+#[test]
+fn test_ud_mut_arg() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test {
+        value: i32,
+    }
+
+    #[user_data]
+    impl Test {
+        fn get_value(&self) -> i32 {
+            self.value
+        }
+
+        fn change(&self, other: &mut Test) {
+            other.value = 2190;
+        }
+    }
+
+    struct Factory;
+    #[user_data]
+    impl Factory {
+        fn new(value: i32) -> Test {
+            Test { value }
+        }
+    }
+
+    lua.register("test", Factory);
+
+    let value = lua.do_string::<i32>(
+        r#"
+        local Test = require 'test'
+        local a = Test.new(1)
+        local b = Test.new(23)
+
+        a:change(b)
+        return b:get_value()
+    "#,
+    );
+    assert!(matches!(value, Ok(2190)));
+}
+
+#[test]
+fn test_ud_borrow_checker() {
+    use gag::BufferRedirect;
+
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test;
+
+    #[user_data]
+    impl Test {
+        fn test(&self, _other: &mut Test) {}
+    }
+
+    lua.register("test", Test);
+
+    let redirect = BufferRedirect::stderr().unwrap();
+
+    let value = lua.do_string::<i32>(
+        r#"
+        local test = require 'test'
+        test:test(test)
+        "#,
+    );
+
+    let _ = redirect.into_inner();
+
+    let expected_msg = "RefCell already borrowed";
+    assert!(matches!(value, Err(Error::LuaError(ref msg)) if msg.contains(expected_msg)));
+}
+
+#[test]
+fn test_table() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    let table = lua.create_table();
+    table.with(|t| {
+        t.push(10i32);
+        t.push(false);
+        t.push("hello world");
+
+        // TODO: &str as key
+        t.set("name".to_string(), "soreto");
+    });
+    lua.register("value", table);
+
+    let value = lua.do_string::<bool>(
+        r#"
+        local value = require 'value'
+        return value[1] == 10 and value[2] == false and value[3] == 'hello world' and value.name == 'soreto'
+        "#,
+    );
+    assert_eq!(value, Ok(true));
+}
+
+#[test]
+fn test_ud_table_arg() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test;
+
+    #[user_data]
+    impl Test {
+        fn use_table(table: Table) {
+            table.with(|t| {
+                t.set(false, 123);
+            })
+        }
+    }
+
+    lua.register("test", Test);
+
+    let value = lua.do_string::<bool>(
+        r#"
+        local test = require 'test'
+        local value = {}
+        test.use_table(value)
+        return value[false] == 123
+        "#,
+    );
+    assert_eq!(value, Ok(true));
+}
+
+#[test]
+fn test_ud_inject_lua() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test2;
+
+    #[user_data]
+    impl Test2 {
+        fn get_value() -> i32 {
+            123
+        }
+    }
+
+    struct Test;
+
+    #[user_data]
+    impl Test {
+        fn test(lua: &Lua) {
+            lua.register("test2", Test2);
+        }
+    }
+
+    lua.register("xxx", Test);
+
+    let value = lua.do_string::<bool>(
+        r#"
+        local test = require 'xxx'
+        test.test()
+
+        local test2 = require 'test2'
+        return test2.get_value() == 123
+        "#,
+    );
+    assert_eq!(value, Ok(true));
+}
+
+#[test]
+fn test_create_ref() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test {
+        value: i32,
+    }
+
+    #[user_data]
+    impl Test {
+        fn get_value(&self) -> i32 {
+            self.value
+        }
+    }
+
+    let mut test_ref = lua.create_ref(Test { value: 0 });
+    test_ref.with_mut(|t| t.value = 123);
+    lua.set_global("test_value", test_ref);
+
+    let value = lua.do_string::<bool>("return test_value:get_value() == 123");
+    assert_eq!(value, Ok(true));
+}

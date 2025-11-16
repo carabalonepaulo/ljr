@@ -99,6 +99,10 @@ where
 
 impl ToLua for () {
     fn to_lua(self, _ptr: *mut luajit2_sys::lua_State) {}
+
+    fn len() -> i32 {
+        0
+    }
 }
 
 impl<T: UserData> ToLua for LuaRef<T> {

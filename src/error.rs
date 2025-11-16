@@ -1,6 +1,6 @@
 use std::ffi::NulError;
 
-#[derive(Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error, PartialEq)]
 pub enum Error {
     #[error("invalid string, interior nul byte found")]
     InvalidCString,

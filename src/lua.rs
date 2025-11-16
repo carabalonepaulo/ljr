@@ -1,7 +1,10 @@
 use luajit2_sys as sys;
 use std::ffi::CString;
 
-use crate::{error::Error, from_lua::FromLua, stack::Stack, table::Table, to_lua::ToLua};
+use crate::{
+    UserData, error::Error, from_lua::FromLua, lua_ref::LuaRef, stack::Stack, table::Table,
+    to_lua::ToLua,
+};
 
 #[derive(Debug)]
 pub struct Lua(*mut sys::lua_State, bool);
@@ -22,6 +25,11 @@ impl Lua {
 
     pub fn create_table(&self) -> Table {
         Table::new(self.0)
+    }
+
+    pub fn create_ref<T: UserData>(&self, value: T) -> LuaRef<T> {
+        value.to_lua(self.0);
+        LuaRef::new(self.0)
     }
 
     pub fn register<T: ToLua>(&self, lib_name: &str, lib_instance: T) {
