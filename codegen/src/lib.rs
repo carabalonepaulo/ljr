@@ -215,10 +215,11 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
             }
         }
 
-        let arg_c_lit = LitInt::new(args_c.to_string().as_str(), Span::call_site());
+        borrow_steps = borrow_steps.into_iter().rev().collect();
+
         let final_block = quote! {
             ljr::helper::catch(ptr, move || {
-                let mut idx = #arg_c_lit;
+                let mut idx = 1;
 
                 #(#borrow_steps)*
 
