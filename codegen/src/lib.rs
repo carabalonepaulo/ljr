@@ -145,10 +145,15 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                         })
                     } else {
                         if let Some((inner_ty, is_mut)) = strip_ref(arg_ty) {
+                            let (let_def, lua_ref) = if is_mut {
+                                (quote! { let mut }, quote! { &mut })
+                            } else {
+                                (quote! { let }, quote! { & })
+                            };
                             if is_type(&inner_ty, "Lua") {
-                                call_args.push(quote_spanned! { arg_name.span() => &#arg_name });
+                                call_args.push(quote_spanned! { arg_name.span() => #lua_ref #arg_name });
                                 borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                    let #arg_name = ljr::lua::Lua::from_ptr(ptr);
+                                    #let_def #arg_name = ljr::lua::Lua::from_ptr(ptr);
                                 });
                             } else if is_type(&inner_ty, "str") {
                                 call_args.push(quote_spanned! { arg_name.span() => #arg_name.as_str() });

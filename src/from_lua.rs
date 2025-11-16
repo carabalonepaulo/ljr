@@ -175,4 +175,19 @@ impl FromLua for () {
     }
 }
 
+impl<T> FromLua for Option<T>
+where
+    T: FromLua,
+{
+    type Output = Option<T::Output>;
+
+    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+        if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TNIL as i32 {
+            Some(None)
+        } else {
+            <T as FromLua>::from_lua(ptr, idx).map(Some)
+        }
+    }
+}
+
 generate_from_lua_tuple_impl!();

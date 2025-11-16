@@ -1,3 +1,5 @@
+mod option;
+
 #[cfg(test)]
 use ljr::prelude::*;
 

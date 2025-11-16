@@ -117,4 +117,16 @@ impl ToLua for Table {
     }
 }
 
+impl<T> ToLua for Option<T>
+where
+    T: ToLua,
+{
+    fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {
+        match self {
+            Some(value) => value.to_lua(ptr),
+            None => unsafe { sys::lua_pushnil(ptr) },
+        }
+    }
+}
+
 generate_to_lua_tuple_impl!();
