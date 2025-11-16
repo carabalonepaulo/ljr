@@ -36,9 +36,33 @@ pub trait UserData {
 
 pub mod prelude {
     pub use crate::UserData;
+    pub use crate::create_table;
     pub use crate::error::Error;
     pub use crate::lua::Lua;
     pub use crate::lua_ref::LuaRef;
     pub use crate::table::Table;
     pub use macros::user_data;
+}
+
+#[macro_export]
+macro_rules! create_table {
+    ($lua:expr, { $($item:tt)* }) => {{
+        let table = $lua.create_table();
+        table.with(|t| {
+            create_table!(0, t, $($item)*);
+        });
+        table
+    }};
+
+    ($n:literal, $table:expr,) => {};
+
+    ($n:literal, $table:expr, $value:expr, $($rest:tt)*) => {
+        $table.push($value);
+        create_table!(0, $table, $($rest)*);
+    };
+
+    ($n:literal, $table:expr, $key:expr => $value:expr, $($rest:tt)*) => {
+        $table.set($key, $value);
+        create_table!(0, $table, $($rest)*);
+    }
 }

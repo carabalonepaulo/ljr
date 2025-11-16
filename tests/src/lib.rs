@@ -443,3 +443,54 @@ fn test_table_iter_pairs() {
 
     assert_eq!(values, expected);
 }
+
+#[test]
+fn test_create_table_with_macros() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let table = create_table!(lua, {
+        "hello",
+        "world",
+        10,
+        20,
+        30,
+        true,
+        false,
+
+        "name".to_string() => "Alice".to_string(),
+        12 => false,
+        true => "ulala".to_string(),
+    });
+
+    assert_eq!(table.len(), 7);
+
+    {
+        let values: Vec<(String, String)> = table.with(|t| t.pairs::<String, String>().collect());
+        assert_eq!(&values, &[("name".to_string(), "Alice".to_string())]);
+    }
+
+    {
+        let mut values: Vec<(i32, bool)> = table.with(|t| t.pairs::<i32, bool>().collect());
+        values.sort_unstable();
+        assert_eq!(&values, &[(6, true), (7, false), (12, false)]);
+    }
+
+    {
+        let values: Vec<(bool, String)> = table.with(|t| t.pairs::<bool, String>().collect());
+        assert_eq!(&values, &[(true, "ulala".to_string())]);
+    }
+
+    {
+        let mut values: Vec<String> =
+            table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
+        values.sort_unstable();
+        assert_eq!(&values, &["hello", "world"]);
+    }
+
+    {
+        let mut values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
+        values.sort_unstable();
+        assert_eq!(&values, &[10, 20, 30]);
+    }
+}

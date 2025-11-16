@@ -165,6 +165,13 @@ impl Table {
         self.0.id
     }
 
+    pub fn len(&self) -> usize {
+        unsafe { sys::lua_rawgeti(self.0.ptr, sys::LUA_REGISTRYINDEX, self.0.id) };
+        let len = unsafe { sys::lua_objlen(self.0.ptr, -1) };
+        unsafe { sys::lua_pop(self.0.ptr, 1) };
+        len
+    }
+
     pub fn with<F, R>(&self, f: F) -> R
     where
         F: FnOnce(&mut TableRef) -> R,
