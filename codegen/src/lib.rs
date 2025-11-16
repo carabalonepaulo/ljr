@@ -160,6 +160,11 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                 borrow_steps.push(quote_spanned! { arg_ty.span() =>
                                     let #arg_name = ljr::helper::from_lua::<ljr::stack_str::StackStr>(ptr, &mut idx, "&str");
                                 });
+                            } else if is_type(&inner_ty, "StackFn") {
+                                call_args.push(quote_spanned! { arg_name.span() => &#arg_name });
+                                borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                    let #arg_name = ljr::helper::from_lua::<#inner_ty>(ptr, &mut idx, #arg_name_str);
+                                })
                             } else {
                                 let (let_def, borrow_method, to_ref) = if is_mut {
                                     (quote! { let mut }, quote! { borrow_mut }, quote! { &mut * })

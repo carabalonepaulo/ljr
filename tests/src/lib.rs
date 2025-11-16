@@ -515,3 +515,70 @@ fn test_table_clear() {
     table.with(|t| t.clear());
     assert_eq!(table.len(), 0);
 }
+
+#[test]
+fn test_stack_fn() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test;
+
+    #[user_data]
+    impl Test {
+        fn test_fn(stack_fn: &StackFn<(i32, i32), (i32, bool)>) -> (i32, bool) {
+            stack_fn.call((12, 4)).unwrap_or((0, false))
+        }
+    }
+    lua.register("test", Test);
+
+    let result = lua.do_string::<(i32, bool)>(
+        r#"
+        local fn = function(a, b)
+            return a + b, true
+        end
+
+        local test = require 'test'
+        return test.test_fn(fn)
+        "#,
+    );
+    assert!(matches!(result, Ok((16, true))));
+}
+
+#[test]
+fn test_fn_ref() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test {
+        callback: Option<FnRef<(i32, i32), (i32, bool)>>,
+    }
+
+    #[user_data]
+    impl Test {
+        fn store(&mut self, fn_ref: FnRef<(i32, i32), (i32, bool)>) {
+            self.callback = Some(fn_ref);
+        }
+
+        fn call(&self, args: (i32, i32)) -> (i32, bool) {
+            self.callback
+                .as_ref()
+                .map(|cb| cb.call(args).unwrap_or((0, false)))
+                .unwrap_or((0, false))
+        }
+    }
+
+    lua.register("test", Test { callback: None });
+
+    let result = lua.do_string::<(i32, bool)>(
+        r#"
+        local fn = function(a, b)
+            return a + b, true
+        end
+
+        local test = require 'test'
+        test:store(fn)
+        return test:call(14, 2)
+        "#,
+    );
+    assert!(matches!(result, Ok((16, true))));
+}
