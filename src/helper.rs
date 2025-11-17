@@ -64,13 +64,13 @@ where
 pub fn catch<F, R>(ptr: *mut sys::lua_State, f: F) -> std::ffi::c_int
 where
     F: FnOnce() -> R + std::panic::UnwindSafe,
-    R: crate::to_lua::ToLua,
+    R: crate::lua::FunctionReturnValue,
 {
     let result = std::panic::catch_unwind(f);
     match result {
         Ok(value) => {
-            crate::to_lua::ToLua::to_lua(value, ptr);
-            <R as crate::to_lua::ToLua>::len() as _
+            crate::lua::FunctionReturnValue::to_lua(value, ptr);
+            <R as crate::lua::FunctionReturnValue>::len() as _
         }
         Err(e) => {
             let err_msg = if let Some(s) = e.downcast_ref::<String>() {

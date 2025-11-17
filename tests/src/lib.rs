@@ -1,3 +1,4 @@
+mod func;
 mod global;
 mod option;
 mod str;
@@ -20,6 +21,13 @@ fn test_do_string_return_bool() {
 
     let value = lua.do_string::<bool>("return false");
     assert_eq!(value, Ok(false));
+}
+
+#[test]
+fn test_do_string_return_tuple() {
+    let mut lua = Lua::new();
+    let value = lua.do_string::<(bool, bool)>("return true, true");
+    assert_eq!(value, Ok((true, true)));
 }
 
 #[test]
@@ -622,7 +630,7 @@ fn test_do_string_no_return() {
     let mut lua = Lua::new();
     lua.open_libs();
 
-    let result = lua.do_string::<()>("local a = false");
+    let result = lua.exec("local a = false");
     assert!(matches!(result, Ok(())));
 
     let result = lua.exec("local a = false");

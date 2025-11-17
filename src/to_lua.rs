@@ -100,14 +100,6 @@ where
     }
 }
 
-impl ToLua for () {
-    fn to_lua(self, _ptr: *mut crate::sys::lua_State) {}
-
-    fn len() -> i32 {
-        0
-    }
-}
-
 impl<T: UserData> ToLua for LuaRef<T> {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id() as _) };

@@ -29,7 +29,7 @@ impl Lua {
     }
 
     pub fn create_ref<T: UserData>(&self, value: T) -> LuaRef<T> {
-        value.to_lua(self.0);
+        <T as ToLua>::to_lua(value, self.0);
         LuaRef::new(self.0)
     }
 
@@ -60,32 +60,34 @@ impl Lua {
         self.do_file::<()>(code)
     }
 
-    pub fn do_file<T: FromLua>(&mut self, file_name: &str) -> Result<T::Output, Error> {
+    pub fn do_file<T: FunctionReturnValue>(&mut self, file_name: &str) -> Result<T::Output, Error> {
         self.eval::<T, _>(|ptr| {
             let file_name = CString::new(file_name)?;
             Ok(unsafe { sys::luaL_loadfile(ptr, file_name.as_ptr() as _) })
         })
     }
 
-    pub fn do_string<T: FromLua>(&mut self, code: &str) -> Result<T::Output, Error> {
+    pub fn do_string<T: FunctionReturnValue>(&mut self, code: &str) -> Result<T::Output, Error> {
         self.eval::<T, _>(|ptr| {
             let cstring = CString::new(code)?;
             Ok(unsafe { sys::luaL_loadstring(ptr, cstring.as_ptr() as _) })
         })
     }
 
-    fn eval<T: FromLua, F: FnOnce(*mut sys::lua_State) -> Result<std::ffi::c_int, Error>>(
+    fn eval<
+        T: FunctionReturnValue,
+        F: FnOnce(*mut sys::lua_State) -> Result<std::ffi::c_int, Error>,
+    >(
         &mut self,
         f: F,
     ) -> Result<T::Output, Error> {
-        let old_top = unsafe { sys::lua_gettop(self.0) };
         if f(self.0)? != 0 {
             let msg = <String as FromLua>::from_lua(self.0, -1).unwrap_or_default();
             unsafe { sys::lua_pop(self.0, 1) };
             return Err(Error::InvalidSyntax(msg));
         }
 
-        if unsafe { sys::lua_pcall(self.0, 0, sys::LUA_MULTRET, 0) } != 0 {
+        if unsafe { sys::lua_pcall(self.0, 0, T::len(), 0) } != 0 {
             if let Some(msg) = <String as FromLua>::from_lua(self.0, -1) {
                 unsafe { sys::lua_pop(self.0, 1) };
                 return Err(Error::LuaError(msg));
@@ -94,12 +96,7 @@ impl Lua {
                 return Err(Error::UnknownLuaError);
             }
         } else {
-            let diff = unsafe { sys::lua_gettop(self.0) } - old_top;
             let size = T::len();
-            if diff != size {
-                return Err(Error::WrongReturnType);
-            }
-
             let value = T::from_lua(self.0, -size).ok_or(Error::WrongReturnType)?;
             if size > 0 {
                 unsafe { sys::lua_pop(self.0, size) };
@@ -191,7 +188,7 @@ impl<T> GetGlobal for LuaRef<T> where T: UserData {}
 impl<I, O> GetGlobal for FnRef<I, O>
 where
     I: FromLua + ToLua,
-    O: FromLua + ToLua,
+    O: FunctionReturnValue,
 {
 }
 
@@ -200,4 +197,49 @@ where
     T: FromLua,
     T::Output: FromLua,
 {
+}
+
+pub trait FunctionReturnValue {
+    type Output;
+
+    fn to_lua(self, ptr: *mut sys::lua_State);
+
+    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self::Output>;
+
+    fn len() -> i32 {
+        1
+    }
+}
+
+impl<T> FunctionReturnValue for T
+where
+    T: FromLua + ToLua,
+{
+    type Output = <T as FromLua>::Output;
+
+    fn to_lua(self, ptr: *mut sys::lua_State) {
+        <T as ToLua>::to_lua(self, ptr);
+    }
+
+    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self::Output> {
+        <T as FromLua>::from_lua(ptr, idx)
+    }
+
+    fn len() -> i32 {
+        <T as FromLua>::len()
+    }
+}
+
+impl FunctionReturnValue for () {
+    type Output = ();
+
+    fn to_lua(self, _: *mut sys::lua_State) {}
+
+    fn from_lua(_: *mut sys::lua_State, _: i32) -> Option<Self::Output> {
+        Some(())
+    }
+
+    fn len() -> i32 {
+        0
+    }
 }

@@ -167,18 +167,6 @@ impl FromLua for StackStr {
     }
 }
 
-impl FromLua for () {
-    type Output = ();
-
-    fn from_lua(_: *mut crate::sys::lua_State, _: i32) -> Option<Self::Output> {
-        Some(())
-    }
-
-    fn len() -> i32 {
-        0
-    }
-}
-
 impl<T> FromLua for Option<T>
 where
     T: FromLua,

@@ -171,7 +171,7 @@ fn test_ud_option_set_flag_some() {
     lua.open_libs();
     lua.register("option_test", OptionTest);
 
-    lua.do_string::<()>(
+    lua.exec(
         r#"
         local ot = require 'option_test'
         ot.set_flag(true)
@@ -189,7 +189,7 @@ fn test_ud_option_set_flag_none() {
     lua.open_libs();
     lua.register("option_test", OptionTest);
 
-    lua.do_string::<()>(
+    lua.exec(
         r#"
         local ot = require 'option_test'
         ot.set_flag(nil)
