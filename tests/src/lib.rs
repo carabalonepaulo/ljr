@@ -623,4 +623,7 @@ fn test_do_string_no_return() {
 
     let result = lua.do_string::<()>("local a = false");
     assert!(matches!(result, Ok(())));
+
+    let result = lua.exec("local a = false");
+    assert!(matches!(result, Ok(())));
 }

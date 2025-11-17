@@ -52,6 +52,10 @@ impl Lua {
         }
     }
 
+    pub fn exec(&mut self, code: &str) -> Result<(), Error> {
+        self.do_string::<()>(code)
+    }
+
     pub fn do_string<T: FromLua>(&mut self, code: &str) -> Result<T::Output, Error> {
         let old_top = unsafe { sys::lua_gettop(self.0) };
         let cstring = CString::new(code)?;
