@@ -8,13 +8,13 @@ use crate::UserData;
 
 #[derive(Debug)]
 struct Inner {
-    ptr: *mut luajit2_sys::lua_State,
+    ptr: *mut crate::sys::lua_State,
     id: i32,
 }
 
 impl Drop for Inner {
     fn drop(&mut self) {
-        unsafe { luajit2_sys::luaL_unref(self.ptr, luajit2_sys::LUA_REGISTRYINDEX, self.id) };
+        unsafe { crate::sys::luaL_unref(self.ptr, crate::sys::LUA_REGISTRYINDEX, self.id) };
     }
 }
 
@@ -25,8 +25,8 @@ pub struct LuaRef<T: UserData> {
 }
 
 impl<T: UserData> LuaRef<T> {
-    pub fn new(ptr: *mut luajit2_sys::lua_State) -> Self {
-        let id = unsafe { luajit2_sys::luaL_ref(ptr, luajit2_sys::LUA_REGISTRYINDEX) };
+    pub fn new(ptr: *mut crate::sys::lua_State) -> Self {
+        let id = unsafe { crate::sys::luaL_ref(ptr, crate::sys::LUA_REGISTRYINDEX) };
         LuaRef {
             inner: Rc::new(Inner { ptr, id }),
             marker: PhantomData,
@@ -42,9 +42,9 @@ impl<T: UserData> LuaRef<T> {
         let id = self.inner.id;
 
         unsafe {
-            luajit2_sys::lua_rawgeti(ptr, luajit2_sys::LUA_REGISTRYINDEX, id);
-            let ud_ptr = luajit2_sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
-            luajit2_sys::lua_pop(ptr, 1);
+            crate::sys::lua_rawgeti(ptr, crate::sys::LUA_REGISTRYINDEX, id);
+            let ud_ptr = crate::sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
+            crate::sys::lua_pop(ptr, 1);
 
             let cell: &RefCell<T> = &**ud_ptr;
             cell.borrow()
@@ -56,9 +56,9 @@ impl<T: UserData> LuaRef<T> {
         let id = self.inner.id;
 
         unsafe {
-            luajit2_sys::lua_rawgeti(ptr, luajit2_sys::LUA_REGISTRYINDEX, id);
-            let ud_ptr = luajit2_sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
-            luajit2_sys::lua_pop(ptr, 1);
+            crate::sys::lua_rawgeti(ptr, crate::sys::LUA_REGISTRYINDEX, id);
+            let ud_ptr = crate::sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
+            crate::sys::lua_pop(ptr, 1);
 
             let cell: &RefCell<T> = &**ud_ptr;
             cell.borrow_mut()

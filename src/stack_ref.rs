@@ -1,4 +1,4 @@
-use luajit2_sys as sys;
+use crate::sys;
 use std::{
     cell::{Ref, RefCell, RefMut},
     marker::PhantomData,
@@ -24,8 +24,7 @@ impl<T: FromLua + UserData> StackRef<T> {
 
     pub fn borrow(&self) -> Ref<'_, T> {
         unsafe {
-            let ud_ptr =
-                luajit2_sys::lua_touserdata(self.ptr, self.idx) as *const *const RefCell<T>;
+            let ud_ptr = crate::sys::lua_touserdata(self.ptr, self.idx) as *const *const RefCell<T>;
             let cell: &RefCell<T> = &**ud_ptr;
             cell.borrow()
         }
@@ -33,8 +32,7 @@ impl<T: FromLua + UserData> StackRef<T> {
 
     pub fn borrow_mut(&self) -> RefMut<'_, T> {
         unsafe {
-            let ud_ptr =
-                luajit2_sys::lua_touserdata(self.ptr, self.idx) as *const *const RefCell<T>;
+            let ud_ptr = crate::sys::lua_touserdata(self.ptr, self.idx) as *const *const RefCell<T>;
             let cell: &RefCell<T> = &**ud_ptr;
             cell.borrow_mut()
         }

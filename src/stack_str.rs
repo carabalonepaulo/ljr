@@ -1,4 +1,4 @@
-use luajit2_sys as sys;
+use crate::sys;
 use std::{ffi::CStr, str::Utf8Error};
 
 #[derive(Debug)]

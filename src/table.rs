@@ -1,7 +1,7 @@
 use std::{collections::HashMap, marker::PhantomData, rc::Rc};
 
+use crate::sys;
 use crate::{defer, from_lua::FromLua, lua_str::LuaStr, to_lua::ToLua};
-use luajit2_sys as sys;
 
 #[derive(Debug)]
 struct Inner {
@@ -11,7 +11,7 @@ struct Inner {
 
 impl Drop for Inner {
     fn drop(&mut self) {
-        unsafe { luajit2_sys::luaL_unref(self.ptr, luajit2_sys::LUA_REGISTRYINDEX, self.id) };
+        unsafe { crate::sys::luaL_unref(self.ptr, crate::sys::LUA_REGISTRYINDEX, self.id) };
     }
 }
 
@@ -170,13 +170,13 @@ pub struct Table(Rc<Inner>);
 impl Table {
     pub(crate) fn new(ptr: *mut sys::lua_State) -> Self {
         unsafe { sys::lua_newtable(ptr) };
-        let id = unsafe { luajit2_sys::luaL_ref(ptr, luajit2_sys::LUA_REGISTRYINDEX) };
+        let id = unsafe { crate::sys::luaL_ref(ptr, crate::sys::LUA_REGISTRYINDEX) };
         Self(Rc::new(Inner { ptr, id }))
     }
 
     pub(crate) fn from_stack(ptr: *mut sys::lua_State, idx: i32) -> Self {
         unsafe { sys::lua_pushvalue(ptr, idx) };
-        let id = unsafe { luajit2_sys::luaL_ref(ptr, luajit2_sys::LUA_REGISTRYINDEX) };
+        let id = unsafe { crate::sys::luaL_ref(ptr, crate::sys::LUA_REGISTRYINDEX) };
         Self(Rc::new(Inner { ptr, id }))
     }
 
@@ -265,11 +265,11 @@ impl_table_key!(i32, f32, f64, bool, String, LuaStr);
 impl<'a> TableKey<'a> for &str {
     type Output = String;
 
-    fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {
+    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         <&str as ToLua>::to_lua(self, ptr);
     }
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         <String as FromLua>::from_lua(ptr, idx)
     }
 }

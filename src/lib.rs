@@ -35,7 +35,7 @@ pub struct Nil;
 
 pub trait UserData {
     fn name() -> *const i8;
-    fn functions() -> Vec<luajit2_sys::luaL_Reg>;
+    fn functions() -> Vec<crate::sys::luaL_Reg>;
 }
 
 pub mod prelude {

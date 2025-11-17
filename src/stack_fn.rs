@@ -1,4 +1,4 @@
-use luajit2_sys as sys;
+use crate::sys;
 use std::marker::PhantomData;
 
 use crate::{error::Error, from_lua::FromLua, to_lua::ToLua};
@@ -48,7 +48,7 @@ where
 {
     type Output = StackFn<I, O>;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
             Some(StackFn::new(ptr, idx))
         } else {

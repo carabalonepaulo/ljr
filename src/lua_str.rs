@@ -1,6 +1,6 @@
 use std::{ffi::CStr, rc::Rc, slice, str::Utf8Error};
 
-use luajit2_sys as sys;
+use crate::sys;
 
 use crate::{from_lua::FromLua, to_lua::ToLua};
 
@@ -60,7 +60,7 @@ impl LuaStr {
 impl FromLua for LuaStr {
     type Output = LuaStr;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
             LuaStr::from_stack(ptr, idx).ok()
         } else {
@@ -70,7 +70,7 @@ impl FromLua for LuaStr {
 }
 
 impl ToLua for LuaStr {
-    fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {
+    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id()) };
     }
 }

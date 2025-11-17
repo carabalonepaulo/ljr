@@ -63,8 +63,8 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
             {
                 type Output = (#(#letters_c,)*);
 
-                fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
-                    let top = unsafe { luajit2_sys::lua_gettop(ptr) };
+                fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
+                    let top = unsafe { crate::sys::lua_gettop(ptr) };
                     let mut idx = {
                         if idx.is_negative() {
                             top + idx + 1
@@ -135,7 +135,7 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
             where
                 #(#where_ch,)*
             {
-                fn to_lua(self, ptr: *mut luajit2_sys::lua_State) {
+                fn to_lua(self, ptr: *mut crate::sys::lua_State) {
                     #(#state_push)*
                 }
 

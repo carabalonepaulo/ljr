@@ -1,4 +1,4 @@
-use luajit2_sys as sys;
+use crate::sys;
 use std::{marker::PhantomData, rc::Rc};
 
 use crate::{error::Error, from_lua::FromLua, to_lua::ToLua};
@@ -16,7 +16,7 @@ pub struct FnRef<I: FromLua + ToLua, O: FromLua + ToLua>(Rc<Inner<I, O>>);
 impl<I: FromLua + ToLua, O: FromLua + ToLua> FnRef<I, O> {
     pub fn from_stack(ptr: *mut sys::lua_State, idx: i32) -> Self {
         unsafe { sys::lua_pushvalue(ptr, idx) };
-        let id = unsafe { luajit2_sys::luaL_ref(ptr, luajit2_sys::LUA_REGISTRYINDEX) };
+        let id = unsafe { crate::sys::luaL_ref(ptr, crate::sys::LUA_REGISTRYINDEX) };
         Self(Rc::new(Inner {
             ptr,
             id,
@@ -56,7 +56,7 @@ where
 {
     type Output = FnRef<I, O>;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
             Some(FnRef::from_stack(ptr, idx))
         } else {

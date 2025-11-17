@@ -1,6 +1,6 @@
 use std::ffi::CStr;
 
-use luajit2_sys as sys;
+use crate::sys;
 use macros::generate_from_lua_tuple_impl;
 
 use crate::{UserData, lua_ref::LuaRef, stack_ref::StackRef, stack_str::StackStr, table::Table};
@@ -18,7 +18,7 @@ pub trait FromLua {
 impl FromLua for i32 {
     type Output = i32;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_isnumber(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_tonumber(ptr, idx) } as i32)
         } else {
@@ -30,7 +30,7 @@ impl FromLua for i32 {
 impl FromLua for f32 {
     type Output = f32;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_isnumber(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_tonumber(ptr, idx) } as f32)
         } else {
@@ -42,7 +42,7 @@ impl FromLua for f32 {
 impl FromLua for f64 {
     type Output = f64;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_isnumber(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_tonumber(ptr, idx) })
         } else {
@@ -54,7 +54,7 @@ impl FromLua for f64 {
 impl FromLua for bool {
     type Output = bool;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_isboolean(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_toboolean(ptr, idx) != 0 })
         } else {
@@ -66,7 +66,7 @@ impl FromLua for bool {
 impl FromLua for String {
     type Output = String;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         unsafe {
             if sys::lua_type(ptr, idx) == sys::LUA_TSTRING as i32 {
                 let ptr = sys::lua_tostring(ptr, idx);
@@ -85,7 +85,7 @@ where
 {
     type Output = StackRef<T>;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         unsafe {
             sys::lua_pushvalue(ptr, idx);
 
@@ -113,7 +113,7 @@ where
 impl<T: UserData> FromLua for LuaRef<T> {
     type Output = LuaRef<T>;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         unsafe {
             sys::lua_pushvalue(ptr, idx);
 
@@ -146,7 +146,7 @@ impl<T: UserData> FromLua for LuaRef<T> {
 impl FromLua for Table {
     type Output = Table;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_istable(ptr, idx) } != 0 {
             Some(Table::from_stack(ptr, idx))
         } else {
@@ -158,7 +158,7 @@ impl FromLua for Table {
 impl FromLua for StackStr {
     type Output = StackStr;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
             StackStr::new(ptr, idx).ok()
         } else {
@@ -170,7 +170,7 @@ impl FromLua for StackStr {
 impl FromLua for () {
     type Output = ();
 
-    fn from_lua(_: *mut luajit2_sys::lua_State, _: i32) -> Option<Self::Output> {
+    fn from_lua(_: *mut crate::sys::lua_State, _: i32) -> Option<Self::Output> {
         Some(())
     }
 
@@ -186,7 +186,7 @@ where
 {
     type Output = Option<T::Output>;
 
-    fn from_lua(ptr: *mut luajit2_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TNIL as i32 {
             Some(None)
         } else {
