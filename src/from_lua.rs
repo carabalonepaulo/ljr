@@ -173,6 +173,10 @@ impl FromLua for () {
     fn from_lua(_: *mut luajit2_sys::lua_State, _: i32) -> Option<Self::Output> {
         Some(())
     }
+
+    fn len() -> i32 {
+        0
+    }
 }
 
 impl<T> FromLua for Option<T>

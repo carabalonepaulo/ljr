@@ -615,3 +615,12 @@ fn test_table_extend_from_map() {
     values.sort_unstable();
     assert_eq!(&values, &[("hello".into(), false), ("world".into(), true)]);
 }
+
+#[test]
+fn test_do_string_no_return() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    let result = lua.do_string::<()>("local a = false");
+    assert!(matches!(result, Ok(())));
+}

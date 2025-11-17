@@ -84,7 +84,9 @@ impl Lua {
             }
 
             let value = T::from_lua(self.0, -size).ok_or(Error::WrongReturnType)?;
-            unsafe { sys::lua_pop(self.0, size) };
+            if size > 0 {
+                unsafe { sys::lua_pop(self.0, size) };
+            }
             Ok(value)
         }
     }
