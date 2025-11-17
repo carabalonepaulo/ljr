@@ -34,7 +34,7 @@ impl IsType for bool {
 
 impl IsType for String {
     fn is_type(ptr: *mut luajit2_sys::lua_State, idx: i32) -> bool {
-        unsafe { sys::lua_isstring(ptr, idx) != 0 }
+        (unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32)
     }
 }
 

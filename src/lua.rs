@@ -1,8 +1,9 @@
-use luajit2_sys as sys;
-use std::ffi::CString;
+use crate::sys;
+use std::{ffi::CString, fmt::Display};
 
 use crate::{
-    UserData, error::Error, from_lua::FromLua, lua_ref::LuaRef, lua_str::LuaStr, stack::Stack,
+    AnyLuaFunction, AnyNativeFunction, AnyUserData, Coroutine, LightUserData, Nil, UserData,
+    error::Error, from_lua::FromLua, is_type::IsType, lua_ref::LuaRef, lua_str::LuaStr,
     table::Table, to_lua::ToLua,
 };
 
@@ -51,14 +52,6 @@ impl Lua {
         }
     }
 
-    pub(crate) fn owned(&self) -> bool {
-        self.1
-    }
-
-    pub fn stack(&self) -> Stack {
-        Stack(self.0)
-    }
-
     pub fn do_string<T: FromLua>(&mut self, code: &str) -> Result<T::Output, Error> {
         let old_top = unsafe { sys::lua_gettop(self.0) };
         let cstring = CString::new(code)?;
@@ -92,16 +85,58 @@ impl Lua {
     }
 
     pub fn set_global(&mut self, name: &str, value: impl ToLua) {
-        self.stack().push(value);
+        value.to_lua(self.0);
         let str = CString::new(name).unwrap();
         unsafe { sys::lua_setglobal(self.0, str.as_ptr()) };
+    }
+
+    pub fn top(&self) -> i32 {
+        unsafe { sys::lua_gettop(self.0) }
     }
 }
 
 impl Drop for Lua {
     fn drop(&mut self) {
-        if self.owned() {
+        if self.1 {
             unsafe { sys::lua_close(self.0) };
         }
+    }
+}
+
+impl Display for Lua {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let size = self.top();
+        writeln!(f, "Stack: {}", size)?;
+
+        for i in 1..=size {
+            write!(f, "[{i}/-{}] ", size - i + 1)?;
+            if <i32 as IsType>::is_type(self.0, i) {
+                writeln!(f, "{}", <i32 as FromLua>::from_lua(self.0, i).unwrap())?;
+            } else if <f32 as IsType>::is_type(self.0, i) {
+                writeln!(f, "{}", <f32 as FromLua>::from_lua(self.0, i).unwrap())?;
+            } else if <f64 as IsType>::is_type(self.0, i) {
+                writeln!(f, "{}", <f64 as FromLua>::from_lua(self.0, i).unwrap())?;
+            } else if <bool as IsType>::is_type(self.0, i) {
+                writeln!(f, "{}", <bool as FromLua>::from_lua(self.0, i).unwrap())?;
+            } else if <String as IsType>::is_type(self.0, i) {
+                writeln!(f, "{}", <String as FromLua>::from_lua(self.0, i).unwrap())?;
+            } else if <AnyLuaFunction as IsType>::is_type(self.0, i) {
+                writeln!(f, "function")?;
+            } else if <AnyNativeFunction as IsType>::is_type(self.0, i) {
+                writeln!(f, "native function")?;
+            } else if <LightUserData as IsType>::is_type(self.0, i) {
+                writeln!(f, "light user data")?;
+            } else if <Table as IsType>::is_type(self.0, i) {
+                writeln!(f, "table")?;
+            } else if <Coroutine as IsType>::is_type(self.0, i) {
+                writeln!(f, "coroutine")?;
+            } else if <Nil as IsType>::is_type(self.0, i) {
+                writeln!(f, "nil")?;
+            } else if <AnyUserData as IsType>::is_type(self.0, i) {
+                writeln!(f, "user data")?;
+            }
+        }
+
+        Ok(())
     }
 }
