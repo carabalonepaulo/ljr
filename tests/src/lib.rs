@@ -1,3 +1,4 @@
+mod global;
 mod option;
 mod str;
 

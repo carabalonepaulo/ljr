@@ -1,4 +1,4 @@
-use crate::sys;
+use crate::{fn_ref::FnRef, sys};
 use std::{ffi::CString, fmt::Display};
 
 use crate::{
@@ -89,9 +89,22 @@ impl Lua {
     }
 
     pub fn set_global(&mut self, name: &str, value: impl ToLua) {
-        value.to_lua(self.0);
-        let str = CString::new(name).unwrap();
-        unsafe { sys::lua_setglobal(self.0, str.as_ptr()) };
+        let ptr = self.0;
+        unsafe { sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len()) };
+        value.to_lua(ptr);
+        unsafe { sys::lua_settable(ptr, sys::LUA_GLOBALSINDEX) };
+    }
+
+    pub fn get_global<T: GetGlobal>(&self, name: &str) -> Option<T::Output> {
+        let ptr = self.0;
+        unsafe {
+            sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
+            sys::lua_gettable(ptr, sys::LUA_GLOBALSINDEX);
+        }
+
+        let out = T::from_lua(ptr, -1);
+        unsafe { sys::lua_pop(ptr, 1) };
+        out
     }
 
     pub fn top(&self) -> i32 {
@@ -143,4 +156,28 @@ impl Display for Lua {
 
         Ok(())
     }
+}
+
+pub trait GetGlobal: FromLua {}
+
+macro_rules! impl_get_global {
+    ($($ty:ty),*) => { $(impl GetGlobal for $ty {} )* };
+}
+
+impl_get_global!(i32, f32, f64, bool, String, LuaStr);
+
+impl<T> GetGlobal for LuaRef<T> where T: UserData {}
+
+impl<I, O> GetGlobal for FnRef<I, O>
+where
+    I: FromLua + ToLua,
+    O: FromLua + ToLua,
+{
+}
+
+impl<T> GetGlobal for Option<T>
+where
+    T: FromLua,
+    T::Output: FromLua,
+{
 }
