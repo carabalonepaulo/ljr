@@ -1,4 +1,5 @@
 pub mod tuple_impl;
+pub mod module;
 
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{format_ident, quote, quote_spanned};

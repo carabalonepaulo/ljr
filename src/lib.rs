@@ -48,7 +48,7 @@ pub mod prelude {
     pub use crate::lua_str::LuaStr;
     pub use crate::stack_fn::StackFn;
     pub use crate::table::Table;
-    pub use macros::user_data;
+    pub use macros::{module, user_data};
 }
 
 #[macro_export]
