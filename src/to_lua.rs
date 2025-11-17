@@ -39,7 +39,7 @@ impl ToLua for bool {
 
 impl ToLua for &str {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        unsafe { sys::lua_pushlstring(ptr, self.as_bytes().as_ptr() as *const i8, self.len()) }
+        unsafe { sys::lua_pushlstring_(ptr, self.as_bytes().as_ptr() as *const i8, self.len()) }
     }
 }
 
@@ -75,7 +75,10 @@ where
                 sys::lua_pushstring(ptr, name);
                 sys::lua_setfield(ptr, mt_idx, c"__name".as_ptr());
 
-                unsafe extern "C" fn __gc<T: UserData>(ptr: *mut crate::sys::lua_State) -> i32 {
+                // unsafe extern "C" fn __gc<T: UserData>(ptr: *mut crate::sys::lua_State) -> i32 {
+                unsafe extern "C-unwind" fn __gc<T: UserData>(
+                    ptr: *mut crate::sys::lua_State,
+                ) -> i32 {
                     unsafe {
                         let ud_ptr = sys::lua_touserdata(ptr, 1) as *mut *mut RefCell<T>;
                         if !ud_ptr.is_null() && !(*ud_ptr).is_null() {
@@ -84,7 +87,7 @@ where
                     }
                     0
                 }
-                sys::lua_pushcclosure(ptr, Some(__gc::<T>), 0);
+                sys::lua_pushcclosure(ptr, __gc::<T>, 0);
                 sys::lua_setfield(ptr, mt_idx, c"__gc".as_ptr());
 
                 sys::lua_newtable(ptr);
@@ -107,13 +110,13 @@ impl ToLua for () {
 
 impl<T: UserData> ToLua for LuaRef<T> {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id()) };
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id() as _) };
     }
 }
 
 impl ToLua for Table {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id()) };
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id() as _) };
     }
 }
 

@@ -11,7 +11,7 @@ struct Inner {
 
 impl Drop for Inner {
     fn drop(&mut self) {
-        unsafe { crate::sys::luaL_unref(self.ptr, crate::sys::LUA_REGISTRYINDEX, self.id) };
+        unsafe { crate::sys::luaL_unref(self.ptr, crate::sys::LUA_REGISTRYINDEX, self.id as _) };
     }
 }
 
@@ -27,7 +27,7 @@ impl<'a, T: FromLua> Iterator for Ipairs<'a, T> {
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.current <= self.len {
-            unsafe { sys::lua_rawgeti(self.tref.0, self.tref.1, self.current) };
+            unsafe { sys::lua_rawgeti(self.tref.0, self.tref.1, self.current as _) };
             let val = <T as FromLua>::from_lua(self.tref.0, -1);
             unsafe { sys::lua_pop(self.tref.0, 1) };
 
@@ -114,12 +114,12 @@ impl TableRef {
             return None;
         }
 
-        unsafe { sys::lua_rawgeti(self.0, self.1, len) };
+        unsafe { sys::lua_rawgeti(self.0, self.1, len as _) };
         let val = <T as FromLua>::from_lua(self.0, -1);
 
         unsafe {
             sys::lua_pushnil(self.0);
-            sys::lua_rawseti(self.0, self.1, len);
+            sys::lua_rawseti(self.0, self.1, len as _);
         }
 
         val
@@ -185,7 +185,7 @@ impl Table {
     }
 
     pub fn len(&self) -> usize {
-        unsafe { sys::lua_rawgeti(self.0.ptr, sys::LUA_REGISTRYINDEX, self.0.id) };
+        unsafe { sys::lua_rawgeti(self.0.ptr, sys::LUA_REGISTRYINDEX, self.0.id as _) };
         let len = unsafe { sys::lua_objlen(self.0.ptr, -1) };
         unsafe { sys::lua_pop(self.0.ptr, 1) };
         len
@@ -219,7 +219,7 @@ impl Table {
 
         defer!(pop, unsafe { sys::lua_pop(ptr, 1) });
 
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id) };
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id as _) };
         let idx = unsafe { sys::lua_gettop(ptr) };
         let mut tref = TableRef(ptr, idx);
         f(&mut tref)

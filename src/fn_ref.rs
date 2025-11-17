@@ -28,7 +28,7 @@ impl<I: FromLua + ToLua, O: FromLua + ToLua> FnRef<I, O> {
         let ptr = self.0.ptr;
         let id = self.0.id;
 
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id) };
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id as _) };
         args.to_lua(ptr);
 
         if unsafe { sys::lua_pcall(ptr, <I as ToLua>::len(), <O as FromLua>::len(), 0) } != 0 {

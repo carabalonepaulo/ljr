@@ -18,7 +18,8 @@ pub mod from_lua;
 pub mod is_type;
 pub mod to_lua;
 
-pub use luajit2_sys as sys;
+pub use mlua_sys as sys;
+// pub use luajit2_sys as sys;
 pub use macros::*;
 
 pub struct AnyUserData;

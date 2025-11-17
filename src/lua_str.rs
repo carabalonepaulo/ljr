@@ -43,7 +43,7 @@ impl LuaStr {
         let ptr = self.0.0;
         let id = self.0.1;
 
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id) };
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id as _) };
         let mut len: usize = 0;
         let str_ptr = unsafe { sys::lua_tolstring(ptr, -1, &mut len) };
         let slice = unsafe { slice::from_raw_parts(str_ptr as *const u8, len) };
@@ -71,6 +71,6 @@ impl FromLua for LuaStr {
 
 impl ToLua for LuaStr {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id()) };
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id() as _) };
     }
 }

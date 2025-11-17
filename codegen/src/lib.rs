@@ -218,11 +218,11 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
             ljr::sys::luaL_Reg {
                 name: #method_name.as_ptr() as _,
                 func: {
-                    unsafe extern "C" fn trampoline(ptr: *mut ljr::sys::lua_State) -> std::ffi::c_int {
+                    unsafe extern "C-unwind" fn trampoline(ptr: *mut ljr::sys::lua_State) -> std::ffi::c_int {
                         ljr::helper::check_arg_count(ptr, #arg_c);
                         #final_block
                     }
-                    Some(trampoline)
+                    trampoline
                 }
             }
         }
@@ -246,7 +246,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                     #reg_list
                     ljr::sys::luaL_Reg {
                         name: std::ptr::null(),
-                        func: None,
+                        func: unsafe { std::mem::transmute::<*const (), ljr::sys::lua_CFunction>(std::ptr::null()) }
                     }
                 ]
             }

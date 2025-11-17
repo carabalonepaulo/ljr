@@ -8,15 +8,14 @@ name = "main"
 path = "src/main.rs"
 
 [dependencies]
-# luajit2-sys = { path = "../luajit2-sys", default-features = false }
-luajit2-sys = "0.0.2"
+mlua-sys = { version = "0.8.3", default-features = false }
 thiserror = "2.0.17"
 macros = { path = "./macros" }
 
 [workspace]
 members = ["macros", "codegen", "tests"]
 
-# [features]
-# default = ["static"]
-# static = ["luajit2-sys/static"]
-# dynamic = ["luajit2-sys/dynamic"]
+[features]
+default = ["static"]
+static = ["mlua-sys/vendored", "mlua-sys/luajit"]
+dynamic = ["mlua-sys/module", "mlua-sys/luajit"]

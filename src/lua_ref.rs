@@ -42,7 +42,7 @@ impl<T: UserData> LuaRef<T> {
         let id = self.inner.id;
 
         unsafe {
-            crate::sys::lua_rawgeti(ptr, crate::sys::LUA_REGISTRYINDEX, id);
+            crate::sys::lua_rawgeti(ptr, crate::sys::LUA_REGISTRYINDEX, id as _);
             let ud_ptr = crate::sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
             crate::sys::lua_pop(ptr, 1);
 
@@ -56,7 +56,7 @@ impl<T: UserData> LuaRef<T> {
         let id = self.inner.id;
 
         unsafe {
-            crate::sys::lua_rawgeti(ptr, crate::sys::LUA_REGISTRYINDEX, id);
+            crate::sys::lua_rawgeti(ptr, crate::sys::LUA_REGISTRYINDEX, id as _);
             let ud_ptr = crate::sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
             crate::sys::lua_pop(ptr, 1);
 
