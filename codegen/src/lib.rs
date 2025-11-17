@@ -3,6 +3,7 @@ pub mod module;
 
 use proc_macro2::{Span, TokenStream, TokenTree};
 use quote::{format_ident, quote, quote_spanned};
+use syn::LitInt;
 use venial::{FnParam, TypeExpr, parse_item};
 
 fn string_to_cstr_lit(value: String) -> TokenStream {
@@ -228,27 +229,34 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
         }
     });
 
+    let mut count = 1;
     let mut reg_list = quote! {};
     for reg in regs {
         reg_list.extend(quote! { #reg, });
+        count += 1;
     }
+
+    let regs_ident = format_ident!("{}_REGS", ud_name.to_uppercase());
+    let regs_count = LitInt::new(format!("{}", count).as_str(), Span::call_site());
 
     quote! {
         #item
+
+        const #regs_ident: [ljr::sys::luaL_Reg; #regs_count] = [
+            #reg_list
+            ljr::sys::luaL_Reg {
+                name: std::ptr::null(),
+                func: ljr::dummy_trampoline,
+            }
+        ];
 
         impl ljr::UserData for #ud_ty {
             fn name() -> *const i8 {
                 #ud_ty_name.as_ptr() as _
             }
 
-            fn functions() -> Vec<ljr::sys::luaL_Reg> {
-                vec![
-                    #reg_list
-                    ljr::sys::luaL_Reg {
-                        name: std::ptr::null(),
-                        func: unsafe { std::mem::transmute::<*const (), ljr::sys::lua_CFunction>(std::ptr::null()) }
-                    }
-                ]
+            fn functions() -> &'static [ljr::sys::luaL_Reg] {
+                &#regs_ident
             }
         }
     }

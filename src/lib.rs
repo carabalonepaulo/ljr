@@ -18,9 +18,8 @@ pub mod from_lua;
 pub mod is_type;
 pub mod to_lua;
 
-pub use mlua_sys as sys;
-// pub use luajit2_sys as sys;
 pub use macros::*;
+pub use mlua_sys as sys;
 
 pub struct AnyUserData;
 
@@ -36,7 +35,7 @@ pub struct Nil;
 
 pub trait UserData {
     fn name() -> *const i8;
-    fn functions() -> Vec<crate::sys::luaL_Reg>;
+    fn functions() -> &'static [crate::sys::luaL_Reg];
 }
 
 pub mod prelude {
@@ -77,4 +76,8 @@ macro_rules! create_table {
     };
 
     ($n:literal, $table:expr, $key:expr => $value:expr) => { $table.set($key, $value); }
+}
+
+pub unsafe extern "C-unwind" fn dummy_trampoline(_: *mut crate::sys::lua_State) -> i32 {
+    0
 }

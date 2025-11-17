@@ -13,6 +13,8 @@ pub struct Lua(*mut sys::lua_State, bool);
 impl Lua {
     pub fn new() -> Self {
         let ptr = unsafe { sys::luaL_newstate() };
+        // let mem_state: *mut MemoryState = Box::into_raw(Box::default());
+        // let ptr = unsafe { sys::lua_newstate(crate::memory::ALLOCATOR, mem_state as _) };
         Self(ptr, true)
     }
 
