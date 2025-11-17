@@ -13,8 +13,6 @@ pub struct Lua(*mut sys::lua_State, bool);
 impl Lua {
     pub fn new() -> Self {
         let ptr = unsafe { sys::luaL_newstate() };
-        // let mem_state: *mut MemoryState = Box::into_raw(Box::default());
-        // let ptr = unsafe { sys::lua_newstate(crate::memory::ALLOCATOR, mem_state as _) };
         Self(ptr, true)
     }
 
@@ -58,10 +56,30 @@ impl Lua {
         self.do_string::<()>(code)
     }
 
+    pub fn exec_file(&mut self, code: &str) -> Result<(), Error> {
+        self.do_file::<()>(code)
+    }
+
+    pub fn do_file<T: FromLua>(&mut self, file_name: &str) -> Result<T::Output, Error> {
+        self.eval::<T, _>(|ptr| {
+            let file_name = CString::new(file_name)?;
+            Ok(unsafe { sys::luaL_loadfile(ptr, file_name.as_ptr() as _) })
+        })
+    }
+
     pub fn do_string<T: FromLua>(&mut self, code: &str) -> Result<T::Output, Error> {
+        self.eval::<T, _>(|ptr| {
+            let cstring = CString::new(code)?;
+            Ok(unsafe { sys::luaL_loadstring(ptr, cstring.as_ptr() as _) })
+        })
+    }
+
+    fn eval<T: FromLua, F: FnOnce(*mut sys::lua_State) -> Result<std::ffi::c_int, Error>>(
+        &mut self,
+        f: F,
+    ) -> Result<T::Output, Error> {
         let old_top = unsafe { sys::lua_gettop(self.0) };
-        let cstring = CString::new(code)?;
-        if unsafe { sys::luaL_loadstring(self.0, cstring.as_ptr() as _) } != 0 {
+        if f(self.0)? != 0 {
             let msg = <String as FromLua>::from_lua(self.0, -1).unwrap_or_default();
             unsafe { sys::lua_pop(self.0, 1) };
             return Err(Error::InvalidSyntax(msg));

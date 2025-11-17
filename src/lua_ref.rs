@@ -57,7 +57,7 @@ impl<T: UserData> LuaRef<T> {
 
         unsafe {
             crate::sys::lua_rawgeti(ptr, crate::sys::LUA_REGISTRYINDEX, id as _);
-            let ud_ptr = crate::sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
+            let ud_ptr = crate::sys::lua_touserdata(ptr, -1) as *mut *mut RefCell<T>;
             crate::sys::lua_pop(ptr, 1);
 
             let cell: &RefCell<T> = &**ud_ptr;

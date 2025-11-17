@@ -11,6 +11,21 @@ pub fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let name = &func.name;
     let wrapper_ident = syn::Ident::new(&format!("luaopen_{}", name.to_string()), name.span());
 
+    let ret_ty = &func.return_ty.clone();
+
+    let impl_body = if let Some(ty) = ret_ty {
+        quote! {
+            let opt_value = #name(&mut lua);
+            <#ty as ljr::to_lua::ToLua>::to_lua(opt_value, ptr);
+            <#ty as ljr::to_lua::ToLua>::len()
+        }
+    } else {
+        quote! {
+            #name(&mut lua);
+            0
+        }
+    };
+
     let expanded = quote! {
         #func
 
@@ -19,8 +34,7 @@ pub fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
             -> ::std::os::raw::c_int
         {
             let mut lua = ljr::lua::Lua::from_ptr(ptr);
-            #name(&mut lua);
-            0
+            #impl_body
         }
     };
 
