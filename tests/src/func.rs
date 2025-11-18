@@ -41,6 +41,19 @@ fn test_fn_ref_no_return() {
 }
 
 #[test]
+fn test_fn_ref_no_arg_no_return() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    let lua_fn = lua
+        .do_string::<FnRef<(), ()>>("return function() end")
+        .unwrap();
+
+    let result = lua_fn.call(());
+    assert!(matches!(result, Ok(())));
+}
+
+#[test]
 fn test_fn_ref_unit_return_on_user_data() {
     let mut lua = Lua::new();
     lua.open_libs();

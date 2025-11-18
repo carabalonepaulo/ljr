@@ -128,4 +128,24 @@ where
     }
 }
 
+impl ToLua for &[u8] {
+    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+        unsafe { sys::lua_pushlstring(ptr, self.as_ptr() as *const i8, self.len()) };
+    }
+}
+
+impl ToLua for Vec<u8> {
+    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+        (self.as_ref() as &[u8]).to_lua(ptr);
+    }
+}
+
+impl ToLua for () {
+    fn to_lua(self, _: *mut mlua_sys::lua_State) {}
+
+    fn len() -> i32 {
+        0
+    }
+}
+
 generate_to_lua_tuple_impl!();

@@ -60,14 +60,14 @@ impl Lua {
         self.do_file::<()>(code)
     }
 
-    pub fn do_file<T: FunctionReturnValue>(&mut self, file_name: &str) -> Result<T::Output, Error> {
+    pub fn do_file<T: FromLua + ToLua>(&mut self, file_name: &str) -> Result<T::Output, Error> {
         self.eval::<T, _>(|ptr| {
             let file_name = CString::new(file_name)?;
             Ok(unsafe { sys::luaL_loadfile(ptr, file_name.as_ptr() as _) })
         })
     }
 
-    pub fn do_string<T: FunctionReturnValue>(&mut self, code: &str) -> Result<T::Output, Error> {
+    pub fn do_string<T: FromLua + ToLua>(&mut self, code: &str) -> Result<T::Output, Error> {
         self.eval::<T, _>(|ptr| {
             let cstring = CString::new(code)?;
             Ok(unsafe { sys::luaL_loadstring(ptr, cstring.as_ptr() as _) })
@@ -75,7 +75,7 @@ impl Lua {
     }
 
     fn eval<
-        T: FunctionReturnValue,
+        T: FromLua + ToLua,
         F: FnOnce(*mut sys::lua_State) -> Result<std::ffi::c_int, Error>,
     >(
         &mut self,
@@ -87,7 +87,7 @@ impl Lua {
             return Err(Error::InvalidSyntax(msg));
         }
 
-        if unsafe { sys::lua_pcall(self.0, 0, T::len(), 0) } != 0 {
+        if unsafe { sys::lua_pcall(self.0, 0, <T as ToLua>::len(), 0) } != 0 {
             if let Some(msg) = <String as FromLua>::from_lua(self.0, -1) {
                 unsafe { sys::lua_pop(self.0, 1) };
                 return Err(Error::LuaError(msg));
@@ -96,7 +96,7 @@ impl Lua {
                 return Err(Error::UnknownLuaError);
             }
         } else {
-            let size = T::len();
+            let size = <T as FromLua>::len();
             let value = T::from_lua(self.0, -size).ok_or(Error::WrongReturnType)?;
             if size > 0 {
                 unsafe { sys::lua_pop(self.0, size) };
@@ -188,7 +188,7 @@ impl<T> GetGlobal for LuaRef<T> where T: UserData {}
 impl<I, O> GetGlobal for FnRef<I, O>
 where
     I: FromLua + ToLua,
-    O: FunctionReturnValue,
+    O: FromLua + ToLua,
 {
 }
 
@@ -227,19 +227,5 @@ where
 
     fn len() -> i32 {
         <T as FromLua>::len()
-    }
-}
-
-impl FunctionReturnValue for () {
-    type Output = ();
-
-    fn to_lua(self, _: *mut sys::lua_State) {}
-
-    fn from_lua(_: *mut sys::lua_State, _: i32) -> Option<Self::Output> {
-        Some(())
-    }
-
-    fn len() -> i32 {
-        0
     }
 }
