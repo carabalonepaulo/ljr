@@ -169,16 +169,16 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                 })
                             } else {
                                 let (let_def, borrow_method, to_ref) = if is_mut {
-                                    (quote! { let mut }, quote! { borrow_mut }, quote! { &mut * })
+                                    (quote! { let mut }, quote! { as_mut }, quote! { &mut * })
                                 } else {
-                                    (quote! { let }, quote! { borrow }, quote! { &* })
+                                    (quote! { let }, quote! { as_ref }, quote! { &* })
                                 };
                                 let guard_tmp_name = format_ident!("{}_guard", arg_name);
                                 let arg_tmp_name = format_ident!("{}_tmp_ref", arg_name);
 
                                 call_args.push(quote_spanned! { arg_name.span() => #arg_name });
                                 borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                    let #guard_tmp_name = ljr::helper::from_lua_stack_ref::<#inner_ty>(ptr, &mut idx);
+                                    #let_def #guard_tmp_name = ljr::helper::from_lua_stack_ref::<#inner_ty>(ptr, &mut idx);
                                     #let_def #arg_tmp_name = #guard_tmp_name.#borrow_method();
                                     let #arg_name = #to_ref #arg_tmp_name;
                                 });
@@ -191,13 +191,13 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                     call_args.push(quote! { __ud_ref });
 
                     let (let_def, borrow_method, to_ref) = if ty.tk_mut.is_some() {
-                        (quote! { let mut }, quote! { borrow_mut }, quote! { &mut * })
+                        (quote! { let mut }, quote! { as_mut }, quote! { &mut * })
                     } else {
-                        (quote! { let }, quote! { borrow }, quote! { &* })
+                        (quote! { let }, quote! { as_ref }, quote! { &* })
                     };
 
                     borrow_steps.push(quote! {
-                        let __ud_guard = ljr::helper::from_lua_stack_ref::<#receiver_ty>(ptr, &mut idx);
+                        #let_def __ud_guard = ljr::helper::from_lua_stack_ref::<#receiver_ty>(ptr, &mut idx);
                         #let_def __ud_tmp_ref = __ud_guard.#borrow_method();
                         let __ud_ref = #to_ref __ud_tmp_ref;
                     });

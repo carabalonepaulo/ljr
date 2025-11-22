@@ -1,10 +1,9 @@
-use crate::{fn_ref::FnRef, sys};
+use crate::{fn_ref::FnRef, sys, ud::Ud};
 use std::{ffi::CString, fmt::Display};
 
 use crate::{
     AnyLuaFunction, AnyNativeFunction, AnyUserData, Coroutine, LightUserData, Nil, UserData,
-    error::Error, from_lua::FromLua, is_type::IsType, lua_ref::LuaRef, lua_str::LuaStr,
-    table::Table, to_lua::ToLua,
+    error::Error, from_lua::FromLua, is_type::IsType, lua_str::LuaStr, table::Table, to_lua::ToLua,
 };
 
 #[derive(Debug)]
@@ -28,9 +27,11 @@ impl Lua {
         Table::new(self.0)
     }
 
-    pub fn create_ref<T: UserData>(&self, value: T) -> LuaRef<T> {
+    pub fn create_ref<T: UserData>(&self, value: T) -> Ud<T> {
         <T as ToLua>::to_lua(value, self.0);
-        LuaRef::new(self.0)
+        let ud = Ud::owned(self.0, -1);
+        unsafe { sys::lua_pop(self.0, 1) };
+        ud
     }
 
     pub fn create_str(&self, value: &str) -> LuaStr {
@@ -120,7 +121,7 @@ impl Lua {
         }
 
         let out = T::from_lua(ptr, -1);
-        unsafe { sys::lua_pop(ptr, 1) };
+        unsafe { sys::lua_pop(ptr, T::len()) };
         out
     }
 
@@ -183,7 +184,8 @@ macro_rules! impl_get_global {
 
 impl_get_global!(i32, f32, f64, bool, String, LuaStr);
 
-impl<T> GetGlobal for LuaRef<T> where T: UserData {}
+// impl<T> GetGlobal for LuaRef<T> where T: UserData {}
+impl<T> GetGlobal for Ud<T> where T: UserData {}
 
 impl<I, O> GetGlobal for FnRef<I, O>
 where

@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use crate::sys;
 use macros::generate_from_lua_tuple_impl;
 
-use crate::{UserData, lua_ref::LuaRef, stack_ref::StackRef, stack_str::StackStr, table::Table};
+use crate::{stack_str::StackStr, table::Table};
 
 pub trait FromLua {
     type Output;
@@ -75,70 +75,6 @@ impl FromLua for String {
             } else {
                 None
             }
-        }
-    }
-}
-
-impl<T> FromLua for T
-where
-    T: UserData,
-{
-    type Output = StackRef<T>;
-
-    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
-        unsafe {
-            sys::lua_pushvalue(ptr, idx);
-
-            if sys::lua_getmetatable(ptr, -1) == 0 {
-                sys::lua_pop(ptr, 1);
-                return None;
-            }
-
-            sys::lua_getfield(ptr, -1, c"__name".as_ptr());
-            let mt_name = sys::lua_tostring(ptr, -1);
-
-            let mt = CStr::from_ptr(mt_name);
-            let expected = CStr::from_ptr(T::name());
-            if mt != expected {
-                sys::lua_pop(ptr, 3);
-                return None;
-            }
-
-            sys::lua_pop(ptr, 2);
-        }
-        Some(StackRef::new(ptr, idx))
-    }
-}
-
-impl<T: UserData> FromLua for LuaRef<T> {
-    type Output = LuaRef<T>;
-
-    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
-        unsafe {
-            sys::lua_pushvalue(ptr, idx);
-
-            if sys::lua_getmetatable(ptr, -1) == 0 {
-                sys::lua_pop(ptr, 1);
-                return None;
-            }
-
-            sys::lua_getfield(ptr, -1, b"__name\0".as_ptr() as _);
-            let mt_name_ptr = sys::lua_tostring(ptr, -1);
-            if mt_name_ptr.is_null() {
-                sys::lua_pop(ptr, 2);
-                return None;
-            }
-
-            let mt_name = CStr::from_ptr(mt_name_ptr);
-            let expected_name = CStr::from_ptr(T::name());
-            if mt_name != expected_name {
-                sys::lua_pop(ptr, 2);
-                return None;
-            }
-
-            sys::lua_pop(ptr, 2);
-
-            Some(LuaRef::new(ptr))
         }
     }
 }
