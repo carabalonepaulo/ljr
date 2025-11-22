@@ -91,8 +91,6 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
 }
 
 pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
-    // let max_lit = syn::parse_macro_input!(attr as LitInt);
-    // let max = max_lit.base10_parse::<usize>().unwrap() + 1;
     let max = 26;
     let mut parts = vec![];
     let alphabet: Vec<char> = (b'A'..b'Z').map(|c| c as char).collect();
@@ -145,4 +143,36 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
     });
 
     quote!(#(#parts)*)
+}
+
+pub fn generate_get_global_tuple_impl(_: TokenStream) -> TokenStream {
+    let max = 26;
+    let mut impls = vec![];
+    let alphabet: Vec<char> = (b'A'..b'Z').map(|c| c as char).collect();
+
+    (2..max).for_each(|n| {
+        let mut letters_a = vec![];
+        let mut where_ch = vec![];
+        let mut cast_impl = vec![];
+
+        (0..n).for_each(|i| {
+            let letter = alphabet[i];
+            let ch = Ident::new(&letter.to_string(), Span::call_site());
+
+            letters_a.push(ch.clone());
+            cast_impl.push(gen_cast(letter));
+            where_ch.push(quote!(#ch: GetGlobal));
+        });
+
+        let letters_b = letters_a.clone();
+        where_ch.push(quote! { (#(#letters_b,)*): FromLua });
+        impls.push(quote! {
+            impl<#(#letters_a,)*> GetGlobal for (#(#letters_b,)*)
+            where
+                #(#where_ch,)*
+            { }
+        });
+    });
+
+    quote!(#(#impls)*)
 }

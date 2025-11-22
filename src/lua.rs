@@ -1,3 +1,5 @@
+use macros::generate_get_global_tuple_impl;
+
 use crate::{func::FnRef, sys, ud::Ud};
 use std::{ffi::CString, fmt::Display};
 
@@ -61,14 +63,14 @@ impl Lua {
         self.do_file::<()>(code)
     }
 
-    pub fn do_file<T: FromLua + ToLua>(&mut self, file_name: &str) -> Result<T::Output, Error> {
+    pub fn do_file<T: GetGlobal + ToLua>(&mut self, file_name: &str) -> Result<T::Output, Error> {
         self.eval::<T, _>(|ptr| {
             let file_name = CString::new(file_name)?;
             Ok(unsafe { sys::luaL_loadfile(ptr, file_name.as_ptr() as _) })
         })
     }
 
-    pub fn do_string<T: FromLua + ToLua>(&mut self, code: &str) -> Result<T::Output, Error> {
+    pub fn do_string<T: GetGlobal + ToLua>(&mut self, code: &str) -> Result<T::Output, Error> {
         self.eval::<T, _>(|ptr| {
             let cstring = CString::new(code)?;
             Ok(unsafe { sys::luaL_loadstring(ptr, cstring.as_ptr() as _) })
@@ -76,7 +78,7 @@ impl Lua {
     }
 
     fn eval<
-        T: FromLua + ToLua,
+        T: GetGlobal + ToLua,
         F: FnOnce(*mut sys::lua_State) -> Result<std::ffi::c_int, Error>,
     >(
         &mut self,
@@ -182,16 +184,9 @@ macro_rules! impl_get_global {
     ($($ty:ty),*) => { $(impl GetGlobal for $ty {} )* };
 }
 
-impl_get_global!(i32, f32, f64, bool, String, LuaStr);
+impl_get_global!((), i32, f32, f64, bool, String, LuaStr);
 
 impl<T> GetGlobal for Ud<T> where T: UserData {}
-
-// impl<I, O> GetGlobal for FnRef<I, O>
-// where
-//     I: FromLua + ToLua,
-//     O: FromLua + ToLua,
-// {
-// }
 
 impl<T> GetGlobal for Option<T>
 where
@@ -206,3 +201,5 @@ where
     O: FromLua + ToLua,
 {
 }
+
+generate_get_global_tuple_impl!();
