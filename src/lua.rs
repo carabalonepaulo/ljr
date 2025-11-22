@@ -1,4 +1,4 @@
-use crate::{fn_ref::FnRef, sys, ud::Ud};
+use crate::{func::FnRef, sys, ud::Ud};
 use std::{ffi::CString, fmt::Display};
 
 use crate::{
@@ -184,19 +184,25 @@ macro_rules! impl_get_global {
 
 impl_get_global!(i32, f32, f64, bool, String, LuaStr);
 
-// impl<T> GetGlobal for LuaRef<T> where T: UserData {}
 impl<T> GetGlobal for Ud<T> where T: UserData {}
 
-impl<I, O> GetGlobal for FnRef<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
-}
+// impl<I, O> GetGlobal for FnRef<I, O>
+// where
+//     I: FromLua + ToLua,
+//     O: FromLua + ToLua,
+// {
+// }
 
 impl<T> GetGlobal for Option<T>
 where
     T: FromLua,
     T::Output: FromLua,
+{
+}
+
+impl<I, O> GetGlobal for FnRef<I, O>
+where
+    I: FromLua + ToLua,
+    O: FromLua + ToLua,
 {
 }
