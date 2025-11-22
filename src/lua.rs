@@ -198,34 +198,3 @@ where
     T::Output: FromLua,
 {
 }
-
-pub trait FunctionReturnValue {
-    type Output;
-
-    fn to_lua(self, ptr: *mut sys::lua_State);
-
-    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self::Output>;
-
-    fn len() -> i32 {
-        1
-    }
-}
-
-impl<T> FunctionReturnValue for T
-where
-    T: FromLua + ToLua,
-{
-    type Output = <T as FromLua>::Output;
-
-    fn to_lua(self, ptr: *mut sys::lua_State) {
-        <T as ToLua>::to_lua(self, ptr);
-    }
-
-    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self::Output> {
-        <T as FromLua>::from_lua(ptr, idx)
-    }
-
-    fn len() -> i32 {
-        <T as FromLua>::len()
-    }
-}
