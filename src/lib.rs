@@ -3,8 +3,6 @@ pub mod error;
 pub mod helper;
 
 pub mod lua;
-pub mod stack;
-
 pub mod lua_str;
 pub mod table;
 
