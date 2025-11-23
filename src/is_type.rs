@@ -1,8 +1,6 @@
 use crate::sys;
 
-use crate::{
-    AnyLuaFunction, AnyNativeFunction, AnyUserData, Coroutine, LightUserData, Nil, table::Table,
-};
+use crate::{AnyLuaFunction, AnyNativeFunction, AnyUserData, Coroutine, LightUserData, Nil};
 
 pub trait IsType {
     fn is_type(ptr: *mut sys::lua_State, idx: i32) -> bool;
@@ -53,12 +51,6 @@ impl IsType for AnyNativeFunction {
 impl IsType for LightUserData {
     fn is_type(ptr: *mut crate::sys::lua_State, idx: i32) -> bool {
         unsafe { sys::lua_islightuserdata(ptr, idx) != 0 }
-    }
-}
-
-impl IsType for Table {
-    fn is_type(ptr: *mut crate::sys::lua_State, idx: i32) -> bool {
-        unsafe { sys::lua_istable(ptr, idx) != 0 }
     }
 }
 

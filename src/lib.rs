@@ -3,10 +3,10 @@ pub mod error;
 pub mod helper;
 
 pub mod lua;
-pub mod table;
 
 pub mod func;
 pub mod lstr;
+pub mod table;
 pub mod ud;
 
 pub mod from_lua;
@@ -37,10 +37,10 @@ pub mod prelude {
     pub use crate::UserData;
     pub use crate::create_table;
     pub use crate::error::Error;
-    pub use crate::func::*;
-    pub use crate::lstr::StrRef;
+    pub use crate::func::{FnRef, StackFn};
+    pub use crate::lstr::{StackStr, StrRef};
     pub use crate::lua::Lua;
-    pub use crate::table::Table;
+    pub use crate::table::{StackTable, TableRef};
     pub use crate::ud::Ud;
     pub use macros::{module, user_data};
 }
@@ -57,7 +57,7 @@ impl Mode for Borrowed {}
 macro_rules! create_table {
     ($lua:expr, { $($item:tt)* }) => {{
         let mut table = $lua.create_table();
-        table.with(|t| {
+        table.with_mut(|t| {
             create_table!(0, t, $($item)*);
         });
         table

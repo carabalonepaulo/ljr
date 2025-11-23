@@ -35,7 +35,7 @@ where
     }
 
     pub fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
-        Self::Borrowed(ptr, idx)
+        Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
     }
 
     pub fn owned(ptr: *mut sys::lua_State, idx: i32) -> Self {

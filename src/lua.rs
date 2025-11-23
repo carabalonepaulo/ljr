@@ -1,6 +1,6 @@
 use macros::generate_get_global_tuple_impl;
 
-use crate::{func::FnRef, lstr::StrRef, sys, ud::Ud};
+use crate::{Borrowed, func::FnRef, lstr::StrRef, sys, table::TableRef, ud::Ud};
 use std::{ffi::CString, fmt::Display};
 
 use crate::{
@@ -25,7 +25,7 @@ impl Lua {
         unsafe { sys::luaL_openlibs(self.0) };
     }
 
-    pub fn create_table(&self) -> Table {
+    pub fn create_table(&self) -> TableRef {
         Table::new(self.0)
     }
 
@@ -163,7 +163,7 @@ impl Display for Lua {
                 writeln!(f, "native function")?;
             } else if <LightUserData as IsType>::is_type(self.0, i) {
                 writeln!(f, "light user data")?;
-            } else if <Table as IsType>::is_type(self.0, i) {
+            } else if <Table<Borrowed> as IsType>::is_type(self.0, i) {
                 writeln!(f, "table")?;
             } else if <Coroutine as IsType>::is_type(self.0, i) {
                 writeln!(f, "coroutine")?;
@@ -184,7 +184,7 @@ macro_rules! impl_get_global {
     ($($ty:ty),*) => { $(impl GetGlobal for $ty {} )* };
 }
 
-impl_get_global!((), i32, f32, f64, bool, String, StrRef);
+impl_get_global!((), i32, f32, f64, bool, String, StrRef, TableRef);
 
 impl<T> GetGlobal for Ud<T> where T: UserData {}
 

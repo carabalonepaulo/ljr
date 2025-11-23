@@ -2,6 +2,7 @@ mod func;
 mod global;
 mod option;
 mod str;
+mod table;
 
 #[cfg(test)]
 use ljr::prelude::*;
@@ -288,7 +289,7 @@ fn test_table() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.with(|t| {
+    table.with_mut(|t| {
         t.push(10i32);
         t.push(false);
         t.push("hello world");
@@ -316,8 +317,8 @@ fn test_ud_table_arg() {
 
     #[user_data]
     impl Test {
-        fn use_table(mut table: Table) {
-            table.with(|t| {
+        fn use_table(mut table: TableRef) {
+            table.with_mut(|t| {
                 t.set(false, 123);
             })
         }
@@ -441,7 +442,7 @@ fn test_table_iter_ipairs() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.with(|t| {
+    table.with_mut(|t| {
         t.push(10i32);
         t.push(20i32);
         t.push(30i32);
@@ -459,7 +460,7 @@ fn test_table_iter_pairs() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.with(|t| {
+    table.with_mut(|t| {
         t.push(10i32);
         t.set("name", "Alice");
         t.push(20i32);
@@ -480,7 +481,7 @@ fn test_create_table_with_macros() {
     let lua = Lua::new();
     lua.open_libs();
 
-    let mut table = create_table!(lua, {
+    let table = create_table!(lua, {
         "hello",
         "world",
         10,
@@ -544,7 +545,7 @@ fn test_table_clear() {
     });
     assert_eq!(table.len(), 7);
     assert_eq!(table.with(|t| t.len()), 7);
-    table.with(|t| t.clear());
+    table.clear();
     assert_eq!(table.len(), 0);
     assert_eq!(lua.top(), 0);
 }
@@ -673,7 +674,7 @@ fn test_table_pairs_break_leak() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.with(|t| {
+    table.with_mut(|t| {
         t.set(1, "a");
         t.set(2, "b");
         t.set(3, "c");

@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use crate::sys;
 use macros::generate_to_lua_tuple_impl;
 
-use crate::{Nil, UserData, table::Table};
+use crate::{Nil, UserData};
 
 pub trait ToLua {
     fn to_lua(self, ptr: *mut sys::lua_State);
@@ -97,18 +97,6 @@ where
 
             sys::lua_setmetatable(ptr, -2);
         }
-    }
-}
-
-// impl<T: UserData> ToLua for LuaRef<T> {
-//     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-//         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id() as _) };
-//     }
-// }
-
-impl ToLua for Table {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id() as _) };
     }
 }
 
