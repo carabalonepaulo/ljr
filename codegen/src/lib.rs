@@ -54,6 +54,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
         let mut call_args: Vec<TokenStream> = vec![];
         let method_name = string_to_cstr_lit(m.name.to_string());
         let mut borrow_steps: Vec<TokenStream> = vec![];
+        let mut safe_args: Vec<TokenStream> = vec![];
 
         let arg_c = {
             let len_expr_list: Vec<TokenStream> = m.params.iter()
@@ -106,6 +107,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                             panic!("the type {0} cannot be taken by value, only by reference, try using &{0} or &mut {0}", type_info.name())
                         }
 
+                        safe_args.push(quote_spanned! { arg_ty.span() => ljr::lua::ensure_get_global_impl::<#arg_ty>(); });
                         call_args.push(quote_spanned! { arg_name.span() => #arg_name });
                         borrow_steps.push(quote_spanned! { arg_ty.span() =>
                             let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str);
@@ -131,11 +133,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                 let #arg_name = ljr::helper::from_lua::<ljr::lstr::StackStr>(ptr, &mut idx, "&str");
                             });
                         } else if SPECIAL_TYPES.iter().any(|n| type_info.name().starts_with(n)) {
-                            let (let_def, ref_def) = match type_info.ref_kind().unwrap() {
-                                Ref::Mut => (quote!(let mut), quote!(&mut)),
-                                Ref::Shared => (quote!(let), quote!(&))
-                            };
-                            call_args.push(quote_spanned! { arg_name.span() => #ref_def #arg_name });
+                            call_args.push(quote_spanned! { arg_name.span() => #lua_ref #arg_name });
                             borrow_steps.push(quote_spanned! { arg_ty.span() =>
                                 #let_def #arg_name = ljr::helper::from_lua::<#ty_ident>(ptr, &mut idx, #arg_name_str);
                             })
@@ -178,6 +176,8 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
         let final_block = quote! {
             ljr::helper::catch(ptr, move || {
+                #(#safe_args)*
+
                 let mut idx = 1;
 
                 #(#borrow_steps)*

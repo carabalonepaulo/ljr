@@ -63,14 +63,14 @@ impl Lua {
         self.do_file::<()>(code)
     }
 
-    pub fn do_file<T: GetGlobal + ToLua>(&mut self, file_name: &str) -> Result<T::Output, Error> {
+    pub fn do_file<T: ValueArg + ToLua>(&mut self, file_name: &str) -> Result<T::Output, Error> {
         self.eval::<T, _>(|ptr| {
             let file_name = CString::new(file_name)?;
             Ok(unsafe { sys::luaL_loadfile(ptr, file_name.as_ptr() as _) })
         })
     }
 
-    pub fn do_string<T: GetGlobal + ToLua>(&mut self, code: &str) -> Result<T::Output, Error> {
+    pub fn do_string<T: ValueArg + ToLua>(&mut self, code: &str) -> Result<T::Output, Error> {
         self.eval::<T, _>(|ptr| {
             let cstring = CString::new(code)?;
             Ok(unsafe { sys::luaL_loadstring(ptr, cstring.as_ptr() as _) })
@@ -78,7 +78,7 @@ impl Lua {
     }
 
     fn eval<
-        T: GetGlobal + ToLua,
+        T: ValueArg + ToLua,
         F: FnOnce(*mut sys::lua_State) -> Result<std::ffi::c_int, Error>,
     >(
         &mut self,
@@ -115,7 +115,7 @@ impl Lua {
         unsafe { sys::lua_settable(ptr, sys::LUA_GLOBALSINDEX) };
     }
 
-    pub fn get_global<T: GetGlobal>(&self, name: &str) -> Option<T::Output> {
+    pub fn get_global<T: ValueArg>(&self, name: &str) -> Option<T::Output> {
         let ptr = self.0;
         unsafe {
             sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
@@ -178,24 +178,24 @@ impl Display for Lua {
     }
 }
 
-pub trait GetGlobal: FromLua {}
+pub trait ValueArg: FromLua {}
 
 macro_rules! impl_get_global {
-    ($($ty:ty),*) => { $(impl GetGlobal for $ty {} )* };
+    ($($ty:ty),*) => { $(impl ValueArg for $ty {} )* };
 }
 
 impl_get_global!((), i32, f32, f64, bool, String, StrRef, TableRef);
 
-impl<T> GetGlobal for Ud<T> where T: UserData {}
+impl<T> ValueArg for Ud<T> where T: UserData {}
 
-impl<T> GetGlobal for Option<T>
+impl<T> ValueArg for Option<T>
 where
     T: FromLua,
     T::Output: FromLua,
 {
 }
 
-impl<I, O> GetGlobal for FnRef<I, O>
+impl<I, O> ValueArg for FnRef<I, O>
 where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
@@ -203,3 +203,5 @@ where
 }
 
 generate_get_global_tuple_impl!();
+
+pub fn ensure_get_global_impl<T: ValueArg>() {}

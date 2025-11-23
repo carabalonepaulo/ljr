@@ -161,13 +161,13 @@ pub fn generate_get_global_tuple_impl(_: TokenStream) -> TokenStream {
 
             letters_a.push(ch.clone());
             cast_impl.push(gen_cast(letter));
-            where_ch.push(quote!(#ch: GetGlobal));
+            where_ch.push(quote!(#ch: ValueArg));
         });
 
         let letters_b = letters_a.clone();
         where_ch.push(quote! { (#(#letters_b,)*): FromLua });
         impls.push(quote! {
-            impl<#(#letters_a,)*> GetGlobal for (#(#letters_b,)*)
+            impl<#(#letters_a,)*> ValueArg for (#(#letters_b,)*)
             where
                 #(#where_ch,)*
             { }
