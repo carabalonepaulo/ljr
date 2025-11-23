@@ -62,7 +62,7 @@ where
 pub fn catch<F, R>(ptr: *mut sys::lua_State, f: F) -> std::ffi::c_int
 where
     F: FnOnce() -> R + std::panic::UnwindSafe,
-    R: crate::from_lua::FromLua + crate::to_lua::ToLua,
+    R: crate::to_lua::ToLua,
 {
     let result = std::panic::catch_unwind(f);
     match result {
@@ -71,19 +71,19 @@ where
             <R as crate::to_lua::ToLua>::len() as _
         }
         Err(e) => {
-            let err_msg = if let Some(s) = e.downcast_ref::<String>() {
-                s.clone()
-            } else if let Some(s) = e.downcast_ref::<&str>() {
-                s.to_string()
-            } else {
-                "unknown panic".to_string()
-            };
-
-            let c_err_msg = format!("Rust panic: {}", err_msg);
-            unsafe {
-                sys::lua_pushlstring(ptr, c_err_msg.as_ptr() as _, c_err_msg.len());
-                sys::lua_error(ptr);
+            {
+                let err_msg = if let Some(s) = e.downcast_ref::<String>() {
+                    s.clone()
+                } else if let Some(s) = e.downcast_ref::<&str>() {
+                    s.to_string()
+                } else {
+                    "unknown panic".to_string()
+                };
+                let c_err_msg = format!("Rust panic: {}", err_msg);
+                unsafe { sys::lua_pushlstring(ptr, c_err_msg.as_ptr() as _, c_err_msg.len()) };
+                std::mem::drop(e);
             }
+            unsafe { sys::lua_error(ptr) };
         }
     }
 }
