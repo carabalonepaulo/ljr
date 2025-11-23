@@ -1,11 +1,11 @@
 use macros::generate_get_global_tuple_impl;
 
-use crate::{func::FnRef, sys, ud::Ud};
+use crate::{func::FnRef, lstr::StrRef, sys, ud::Ud};
 use std::{ffi::CString, fmt::Display};
 
 use crate::{
     AnyLuaFunction, AnyNativeFunction, AnyUserData, Coroutine, LightUserData, Nil, UserData,
-    error::Error, from_lua::FromLua, is_type::IsType, lua_str::LuaStr, table::Table, to_lua::ToLua,
+    error::Error, from_lua::FromLua, is_type::IsType, table::Table, to_lua::ToLua,
 };
 
 #[derive(Debug)]
@@ -36,8 +36,8 @@ impl Lua {
         ud
     }
 
-    pub fn create_str(&self, value: &str) -> LuaStr {
-        LuaStr::new(self.0, value)
+    pub fn create_str(&self, value: &str) -> StrRef {
+        StrRef::new(self.0, value)
     }
 
     pub fn register<T: ToLua>(&self, lib_name: &str, lib_instance: T) {
@@ -184,7 +184,7 @@ macro_rules! impl_get_global {
     ($($ty:ty),*) => { $(impl GetGlobal for $ty {} )* };
 }
 
-impl_get_global!((), i32, f32, f64, bool, String, LuaStr);
+impl_get_global!((), i32, f32, f64, bool, String, StrRef);
 
 impl<T> GetGlobal for Ud<T> where T: UserData {}
 

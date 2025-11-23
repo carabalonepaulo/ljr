@@ -1,14 +1,6 @@
 use std::{marker::PhantomData, rc::Rc};
 
-use crate::{error::Error, from_lua::FromLua, sys, to_lua::ToLua};
-
-pub trait Mode {}
-
-pub struct Owned;
-impl Mode for Owned {}
-
-pub struct Borrowed;
-impl Mode for Borrowed {}
+use crate::{Borrowed, Mode, Owned, error::Error, from_lua::FromLua, sys, to_lua::ToLua};
 
 pub type StackFn<I, O> = Func<Borrowed, I, O>;
 

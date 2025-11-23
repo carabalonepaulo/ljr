@@ -29,9 +29,9 @@ fn test_get_global_luastr() {
     lua.set_global("ls", s.clone());
     assert_eq!(lua.top(), 0);
 
-    let got = lua.get_global::<LuaStr>("ls");
+    let got = lua.get_global::<StrRef>("ls");
     assert!(got.is_some());
-    assert_eq!(got.unwrap().as_str(), "hello");
+    assert_eq!(got.unwrap().as_str(), Some("hello"));
 }
 
 #[test]

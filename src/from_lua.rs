@@ -3,7 +3,7 @@ use std::ffi::CStr;
 use crate::sys;
 use macros::generate_from_lua_tuple_impl;
 
-use crate::{stack_str::StackStr, table::Table};
+use crate::table::Table;
 
 pub trait FromLua {
     type Output;
@@ -85,18 +85,6 @@ impl FromLua for Table {
     fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_istable(ptr, idx) } != 0 {
             Some(Table::from_stack(ptr, idx))
-        } else {
-            None
-        }
-    }
-}
-
-impl FromLua for StackStr {
-    type Output = StackStr;
-
-    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
-        if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
-            StackStr::new(ptr, idx).ok()
         } else {
             None
         }

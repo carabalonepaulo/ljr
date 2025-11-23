@@ -1,7 +1,8 @@
 use std::{collections::HashMap, marker::PhantomData, rc::Rc};
 
+use crate::lstr::StrRef;
 use crate::sys;
-use crate::{defer, from_lua::FromLua, lua_str::LuaStr, to_lua::ToLua};
+use crate::{defer, from_lua::FromLua, to_lua::ToLua};
 
 #[derive(Debug)]
 struct Inner {
@@ -260,7 +261,7 @@ macro_rules! impl_table_key {
     };
 }
 
-impl_table_key!(i32, f32, f64, bool, String, LuaStr);
+impl_table_key!(i32, f32, f64, bool, String, StrRef);
 
 impl<'a> TableKey<'a> for &str {
     type Output = String;

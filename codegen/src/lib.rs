@@ -111,7 +111,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                     if is_type(&inner, "Lua") {
                                         None
                                     } else if is_type(&inner, "str") {
-                                        Some(quote! { <ljr::stack_str::StackStr as ljr::from_lua::FromLua>::len() })
+                                        Some(quote! { <ljr::lstr::StackStr as ljr::from_lua::FromLua>::len() })
                                     } else {
                                         Some(quote! { <#inner as ljr::from_lua::FromLua>::len() })
                                     }
@@ -158,9 +158,9 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                     #let_def #arg_name = ljr::lua::Lua::from_ptr(ptr);
                                 });
                             } else if is_type(&inner_ty, "str") {
-                                call_args.push(quote_spanned! { arg_name.span() => #arg_name.as_str() });
+                                call_args.push(quote_spanned! { arg_name.span() => #arg_name.as_str().expect("lua string is not a valid rust string") });
                                 borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                    let #arg_name = ljr::helper::from_lua::<ljr::stack_str::StackStr>(ptr, &mut idx, "&str");
+                                    let #arg_name = ljr::helper::from_lua::<ljr::lstr::StackStr>(ptr, &mut idx, "&str");
                                 });
                             } else if is_type(&inner_ty, "StackFn") {
                                 call_args.push(quote_spanned! { arg_name.span() => &#arg_name });

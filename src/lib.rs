@@ -3,13 +3,11 @@ pub mod error;
 pub mod helper;
 
 pub mod lua;
-pub mod lua_str;
 pub mod table;
 
 pub mod func;
+pub mod lstr;
 pub mod ud;
-
-pub mod stack_str;
 
 pub mod from_lua;
 pub mod is_type;
@@ -40,12 +38,20 @@ pub mod prelude {
     pub use crate::create_table;
     pub use crate::error::Error;
     pub use crate::func::*;
+    pub use crate::lstr::StrRef;
     pub use crate::lua::Lua;
-    pub use crate::lua_str::LuaStr;
     pub use crate::table::Table;
     pub use crate::ud::Ud;
     pub use macros::{module, user_data};
 }
+
+pub trait Mode {}
+
+pub struct Owned;
+impl Mode for Owned {}
+
+pub struct Borrowed;
+impl Mode for Borrowed {}
 
 #[macro_export]
 macro_rules! create_table {
