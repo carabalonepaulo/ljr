@@ -12,6 +12,7 @@ fn test_fn_ref_unit_return() {
 
     let result = lua_fn.call("hello".into());
     assert!(matches!(result, Ok(())));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -25,6 +26,7 @@ fn test_fn_ref_wrong_return() {
 
     let result = lua_fn.call("hello".into());
     assert!(matches!(result, Err(Error::WrongReturnType)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -38,6 +40,7 @@ fn test_fn_ref_no_return() {
 
     let result = lua_fn.call("hello".into());
     assert!(matches!(result, Err(Error::WrongReturnType)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -51,6 +54,7 @@ fn test_fn_ref_no_arg_no_return() {
 
     let result = lua_fn.call(());
     assert!(matches!(result, Ok(())));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -102,7 +106,6 @@ fn test_fn_ref_unit_return_on_user_data() {
 
     assert!(matches!(valid_result, Ok((true, true))));
     assert!(matches!(invalid_result, Ok((true, true))));
-
     assert_eq!(0, lua.top());
 }
 

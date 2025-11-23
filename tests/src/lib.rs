@@ -11,6 +11,7 @@ fn test_do_string_return_num() {
     let mut lua = Lua::new();
     let value = lua.do_string::<i32>("return 1");
     assert!(matches!(value, Ok(1)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -21,6 +22,7 @@ fn test_do_string_return_bool() {
 
     let value = lua.do_string::<bool>("return false");
     assert_eq!(value, Ok(false));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -28,6 +30,7 @@ fn test_do_string_return_tuple() {
     let mut lua = Lua::new();
     let value = lua.do_string::<(bool, bool)>("return true, true");
     assert_eq!(value, Ok((true, true)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -36,6 +39,7 @@ fn test_do_string_return_f32() {
     let value = lua.do_string::<f32>("return 3.14");
     assert!(value.is_ok());
     assert!((value.unwrap() - 3.14).abs() < f32::EPSILON);
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -44,6 +48,7 @@ fn test_do_string_return_f64() {
     let value = lua.do_string::<f64>("return 1.23456789");
     assert!(value.is_ok());
     assert!((value.unwrap() - 1.23456789).abs() < f64::EPSILON);
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -51,6 +56,7 @@ fn test_do_string_return_string() {
     let mut lua = Lua::new();
     let value = lua.do_string::<String>("return 'hello world'");
     assert!(matches!(value, Ok(ref s) if s == "hello world"));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -61,6 +67,7 @@ fn test_do_string_error() {
     let value = lua.do_string::<String>("error('error')");
     let expected_err_msg = r#"[string "error('error')"]:1: error"#.to_string();
     assert_eq!(value, Err(Error::LuaError(expected_err_msg)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -74,6 +81,7 @@ fn test_simple_user_data() {
     impl Person {}
 
     lua.register("person", Person);
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -99,6 +107,7 @@ fn test_ud_simple_func() {
     "#,
     );
     assert!(matches!(value, Ok(12)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -124,6 +133,7 @@ fn test_ud_fn_tuple() {
     "#,
     );
     assert!(matches!(value, Ok((12, false))));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -156,6 +166,7 @@ fn test_ud_mut_self() {
     "#,
     );
     assert!(matches!(value, Ok(2190)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -192,6 +203,7 @@ fn test_ud_ctor() {
     "#,
     );
     assert!(matches!(value, Ok(true)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -235,6 +247,7 @@ fn test_ud_mut_arg() {
     "#,
     );
     assert!(matches!(value, Ok(2190)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -266,6 +279,7 @@ fn test_ud_borrow_checker() {
 
     let expected_msg = "RefCell already borrowed";
     assert!(matches!(value, Err(Error::LuaError(ref msg)) if msg.contains(expected_msg)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -290,6 +304,7 @@ fn test_table() {
         "#,
     );
     assert_eq!(value, Ok(true));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -319,6 +334,7 @@ fn test_ud_table_arg() {
         "#,
     );
     assert_eq!(value, Ok(true));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -356,6 +372,7 @@ fn test_ud_inject_lua() {
         "#,
     );
     assert_eq!(value, Ok(true));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -380,6 +397,7 @@ fn test_create_ref() {
 
     let value = lua.do_string::<bool>("return test_value:get_value() == 123");
     assert_eq!(value, Ok(true));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -397,6 +415,7 @@ fn test_ud_fn_wrong_arg_count_error() {
     let value = lua.do_string::<i32>("local test = require 'test'; return test.sum(10)"); // Apenas 1 argumento
     let err_msg = "wrong number of arguments";
     assert!(matches!(value, Err(Error::LuaError(msg)) if msg.contains(err_msg)));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -413,6 +432,7 @@ fn test_ud_fn_wrong_arg_type_error() {
     lua.register("test", Test);
     let value = lua.do_string::<i32>("local test = require 'test'; return test.sum(10, 'hello')"); // String em vez de i32
     assert!(matches!(value, Err(Error::LuaError(msg)) if msg.contains("invalid argument")));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -430,6 +450,7 @@ fn test_table_iter_ipairs() {
     let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
 
     assert_eq!(values, vec![10, 20, 30]);
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -451,6 +472,7 @@ fn test_table_iter_pairs() {
     expected.sort_unstable();
 
     assert_eq!(values, expected);
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -502,6 +524,8 @@ fn test_create_table_with_macros() {
         values.sort_unstable();
         assert_eq!(&values, &[10, 20, 30]);
     }
+
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -522,6 +546,7 @@ fn test_table_clear() {
     assert_eq!(table.with(|t| t.len()), 7);
     table.with(|t| t.clear());
     assert_eq!(table.len(), 0);
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -550,6 +575,7 @@ fn test_stack_fn() {
         "#,
     );
     assert!(matches!(result, Ok((16, true))));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -589,6 +615,7 @@ fn test_fn_ref() {
         "#,
     );
     assert!(matches!(result, Ok((16, true))));
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -604,6 +631,7 @@ fn test_table_extend_from_slice() {
 
     table.clear();
     assert_eq!(table.len(), 0);
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -623,6 +651,7 @@ fn test_table_extend_from_map() {
     let mut values: Vec<(String, bool)> = table.with(|t| t.pairs::<String, bool>().collect());
     values.sort_unstable();
     assert_eq!(&values, &[("hello".into(), false), ("world".into(), true)]);
+    assert_eq!(lua.top(), 0);
 }
 
 #[test]
@@ -635,4 +664,5 @@ fn test_do_string_no_return() {
 
     let result = lua.exec("local a = false");
     assert!(matches!(result, Ok(())));
+    assert_eq!(lua.top(), 0);
 }

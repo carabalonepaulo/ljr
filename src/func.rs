@@ -74,10 +74,12 @@ where
                     inner.0
                 }
             };
+            let old_top = sys::lua_gettop(ptr) - 1;
 
             args.to_lua(ptr);
+            let o_len = <O as FromLua>::len();
 
-            if sys::lua_pcall(ptr, <I as ToLua>::len(), <O as FromLua>::len(), 0) != 0 {
+            if sys::lua_pcall(ptr, <I as ToLua>::len(), o_len, 0) != 0 {
                 if let Some(msg) = <String as FromLua>::from_lua(ptr, -1) {
                     sys::lua_pop(ptr, 1);
                     return Err(Error::LuaError(msg));
@@ -86,9 +88,11 @@ where
                     return Err(Error::UnknownLuaError);
                 }
             } else {
-                if let Some(value) = O::from_lua(ptr, <O as FromLua>::len() * -1) {
+                if let Some(value) = O::from_lua(ptr, o_len * -1) {
                     Ok(value)
                 } else {
+                    let diff = sys::lua_gettop(ptr) - old_top;
+                    sys::lua_pop(ptr, diff);
                     Err(Error::WrongReturnType)
                 }
             }
