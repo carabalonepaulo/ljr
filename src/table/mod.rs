@@ -224,6 +224,20 @@ impl FromLua for TableRef {
     }
 }
 
+impl<M> ToLua for &Table<M>
+where
+    M: Mode,
+{
+    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+        match self {
+            Table::Borrowed(_, idx) => unsafe { sys::lua_pushvalue(ptr, *idx) },
+            Table::Owned(inner) => unsafe {
+                sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
+            },
+        }
+    }
+}
+
 impl<M> ToLua for Table<M>
 where
     M: Mode,

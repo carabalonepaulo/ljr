@@ -10,7 +10,7 @@ fn test_stack_table_mutation() {
 
     #[user_data]
     impl Test {
-        fn modify(mut table: StackTable) {
+        fn modify(table: &mut StackTable) {
             table.with_mut(|t| {
                 let current = t.get::<i32>("val").unwrap_or(0);
                 t.set("result", current * 2);
@@ -26,7 +26,7 @@ fn test_stack_table_mutation() {
         local test = require 'test'
         local t = { val = 21 }
         test.modify(t)
-        
+
         -- O Rust deve ter criado 'result' (42) e zerado 'val'
         return t.result == 42 and t.val == 0
         "#,
@@ -44,7 +44,7 @@ fn test_stack_table_array_push() {
 
     #[user_data]
     impl Test {
-        fn append_numbers(mut table: StackTable) -> i32 {
+        fn append_numbers(table: &mut StackTable) -> i32 {
             table.with_mut(|t| {
                 t.push(30);
                 t.push(40);
@@ -60,9 +60,9 @@ fn test_stack_table_array_push() {
         local test = require 'test'
         local list = {10, 20}
         local new_len = test.append_numbers(list)
-        
-        return new_len == 4 
-            and list[3] == 30 
+
+        return new_len == 4
+            and list[3] == 30
             and list[4] == 40
         "#,
     );
@@ -79,7 +79,7 @@ fn test_stack_table_pairs_iter() {
 
     #[user_data]
     impl Test {
-        fn sum_values(table: StackTable) -> i32 {
+        fn sum_values(table: &StackTable) -> i32 {
             table.with(|t| {
                 let mut sum = 0;
                 for (_k, v) in t.pairs::<String, i32>() {
@@ -113,7 +113,7 @@ fn test_stack_table_ipairs_iter() {
 
     #[user_data]
     impl Test {
-        fn concat_strings(table: StackTable) -> String {
+        fn concat_strings(table: &StackTable) -> String {
             table.with(|t| {
                 let mut result = String::new();
                 for (_, s) in t.ipairs::<String>() {
@@ -147,7 +147,7 @@ fn test_stack_table_clear() {
 
     #[user_data]
     impl Test {
-        fn wipe(mut table: StackTable) {
+        fn wipe(table: &mut StackTable) {
             table.clear();
         }
     }
@@ -158,11 +158,11 @@ fn test_stack_table_clear() {
         r#"
         local test = require 'test'
         local t = { a = 1, b = 2, [1] = 10 }
-        
+
         if t.a ~= 1 then return false end
-        
+
         test.wipe(t)
-        
+
         local count = 0
         for _ in pairs(t) do count = count + 1 end
         return count == 0
@@ -174,7 +174,7 @@ fn test_stack_table_clear() {
 }
 
 #[test]
-fn test_stack_table_passthrough() {
+fn test_table_ref_passthrough() {
     let mut lua = Lua::new();
     lua.open_libs();
 
@@ -182,7 +182,7 @@ fn test_stack_table_passthrough() {
 
     #[user_data]
     impl Test {
-        fn pass(table: StackTable) -> StackTable {
+        fn pass(table: TableRef) -> TableRef {
             table
         }
     }
@@ -194,7 +194,7 @@ fn test_stack_table_passthrough() {
         local test = require 'test'
         local original = { id = 123 }
         local returned = test.pass(original)
-        
+
         return original == returned and returned.id == 123
         "#,
     );
@@ -205,6 +205,9 @@ fn test_stack_table_passthrough() {
 
 #[test]
 fn test_stack_table_type_check_error() {
+    use ljr::Borrowed;
+    use ljr::table::Table;
+
     let mut lua = Lua::new();
     lua.open_libs();
 
@@ -212,7 +215,7 @@ fn test_stack_table_type_check_error() {
 
     #[user_data]
     impl Test {
-        fn expect_table(_t: StackTable) -> bool {
+        fn expect_table(_t: &Table<Borrowed>) -> bool {
             true
         }
     }

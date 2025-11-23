@@ -84,6 +84,7 @@ where
                 std::mem::drop(e);
             }
             unsafe { sys::lua_error(ptr) };
+            0
         }
     }
 }
