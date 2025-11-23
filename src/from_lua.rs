@@ -1,5 +1,3 @@
-use std::ffi::CStr;
-
 use crate::sys;
 use macros::generate_from_lua_tuple_impl;
 
@@ -67,9 +65,14 @@ impl FromLua for String {
     fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
         unsafe {
             if sys::lua_type(ptr, idx) == sys::LUA_TSTRING as i32 {
-                let ptr = sys::lua_tostring(ptr, idx);
-                let cstr = CStr::from_ptr(ptr);
-                Some(cstr.to_str().ok()?.to_string())
+                let mut len = 0;
+                let char_ptr = sys::lua_tolstring(ptr, idx, &mut len);
+                if char_ptr.is_null() {
+                    return None;
+                }
+
+                let slice = std::slice::from_raw_parts(char_ptr as *const u8, len);
+                std::str::from_utf8(slice).ok().map(|s| s.to_string())
             } else {
                 None
             }

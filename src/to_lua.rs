@@ -136,4 +136,27 @@ impl ToLua for () {
     }
 }
 
+impl<T, E> ToLua for Result<T, E>
+where
+    T: ToLua,
+    E: ToLua,
+{
+    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+        match self {
+            Ok(value) => {
+                unsafe { sys::lua_pushnil(ptr) };
+                value.to_lua(ptr);
+            }
+            Err(e) => {
+                e.to_lua(ptr);
+                unsafe { sys::lua_pushnil(ptr) };
+            }
+        }
+    }
+
+    fn len() -> i32 {
+        2
+    }
+}
+
 generate_to_lua_tuple_impl!();
