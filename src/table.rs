@@ -218,11 +218,11 @@ impl Table {
         let ptr = self.0.ptr;
         let id = self.0.id;
 
-        defer!(pop, unsafe { sys::lua_pop(ptr, 1) });
-
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id as _) };
-        let idx = unsafe { sys::lua_gettop(ptr) };
-        let mut tref = TableRef(ptr, idx);
+        let top = unsafe { sys::lua_gettop(ptr) };
+        defer!(pop, unsafe { sys::lua_settop(ptr, top - 1) });
+
+        let mut tref = TableRef(ptr, top);
         f(&mut tref)
     }
 }

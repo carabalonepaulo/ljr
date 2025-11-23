@@ -666,3 +666,26 @@ fn test_do_string_no_return() {
     assert!(matches!(result, Ok(())));
     assert_eq!(lua.top(), 0);
 }
+
+#[test]
+fn test_table_pairs_break_leak() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.with(|t| {
+        t.set(1, "a");
+        t.set(2, "b");
+        t.set(3, "c");
+    });
+
+    assert_eq!(lua.top(), 0);
+
+    table.with(|t| {
+        for (_k, _v) in t.pairs::<i32, String>() {
+            break;
+        }
+    });
+
+    assert_eq!(lua.top(), 0);
+}
