@@ -143,12 +143,12 @@ where
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         match self {
             Ok(value) => {
-                unsafe { sys::lua_pushnil(ptr) };
                 value.to_lua(ptr);
+                unsafe { sys::lua_pushnil(ptr) };
             }
             Err(e) => {
-                e.to_lua(ptr);
                 unsafe { sys::lua_pushnil(ptr) };
+                e.to_lua(ptr);
             }
         }
     }
