@@ -1,13 +1,15 @@
 use std::{marker::PhantomData, rc::Rc};
 
-use crate::{Borrowed, Mode, Owned, error::Error, from_lua::FromLua, sys, to_lua::ToLua};
+use crate::{
+    Borrowed, Mode, Owned, error::Error, from_lua::FromLua, lua::InnerLua, sys, to_lua::ToLua,
+};
 
 pub type StackFn<I, O> = Func<Borrowed, I, O>;
 
 pub type FnRef<I, O> = Func<Owned, I, O>;
 
 pub struct OwnedFunc<M: Mode, I: FromLua + ToLua, O: FromLua + ToLua>(
-    *mut sys::lua_State,
+    Rc<InnerLua>,
     i32,
     PhantomData<(M, I, O)>,
 );
@@ -19,7 +21,10 @@ where
     O: FromLua + ToLua,
 {
     fn drop(&mut self) {
-        unsafe { sys::luaL_unref(self.0, sys::LUA_REGISTRYINDEX, self.1) }
+        let ptr = self.0.state_or_null();
+        if !ptr.is_null() {
+            unsafe { sys::luaL_unref(self.0.state(), sys::LUA_REGISTRYINDEX, self.1) }
+        }
     }
 }
 
@@ -38,18 +43,19 @@ where
         Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
     }
 
-    pub fn owned(ptr: *mut sys::lua_State, idx: i32) -> Self {
+    pub fn owned(inner: Rc<InnerLua>, idx: i32) -> Self {
         unsafe {
+            let ptr = inner.state();
             let idx = sys::lua_absindex(ptr, idx);
             sys::lua_pushvalue(ptr, idx);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Self::Owned(Rc::new(OwnedFunc(ptr, id, PhantomData)))
+            Self::Owned(Rc::new(OwnedFunc(inner, id, PhantomData)))
         }
     }
 
     pub fn to_owned(&self) -> Self {
         match self {
-            Func::Borrowed(ptr, idx) => Self::owned(*ptr, *idx),
+            Func::Borrowed(ptr, idx) => Self::owned(InnerLua::from_ptr(*ptr), *idx),
             Func::Owned(ud) => Self::Owned(ud.clone()),
         }
     }
@@ -62,8 +68,9 @@ where
                     *ptr
                 }
                 Func::Owned(inner) => {
-                    sys::lua_rawgeti(inner.0, sys::LUA_REGISTRYINDEX, inner.1 as _);
-                    inner.0
+                    let ptr = inner.0.state();
+                    sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
+                    ptr
                 }
             };
             let old_top = sys::lua_gettop(ptr) - 1;
@@ -112,7 +119,7 @@ where
 
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
-            Some(Func::owned(ptr, idx))
+            Some(Func::owned(InnerLua::from_ptr(ptr), idx))
         } else {
             None
         }
@@ -126,7 +133,7 @@ where
 {
     type Output = StackFn<I, O>;
 
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
             Some(Func::borrowed(ptr, idx))
         } else {
@@ -141,7 +148,7 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+    fn to_lua(self, ptr: *mut sys::lua_State) {
         unsafe {
             match self {
                 Func::Borrowed(_, idx) => sys::lua_pushvalue(ptr, idx),

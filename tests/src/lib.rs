@@ -1,6 +1,7 @@
 mod func;
 mod global;
 mod option;
+mod safety;
 mod str;
 mod table;
 

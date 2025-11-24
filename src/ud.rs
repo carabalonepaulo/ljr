@@ -5,16 +5,19 @@ use std::{
     rc::Rc,
 };
 
-use crate::{UserData, from_lua::FromLua, sys, to_lua::ToLua};
+use crate::{UserData, from_lua::FromLua, lua::InnerLua, sys, to_lua::ToLua};
 
-pub struct OwnedUserData<T: UserData>(*mut sys::lua_State, i32, PhantomData<T>);
+pub struct OwnedUserData<T: UserData>(Rc<InnerLua>, i32, PhantomData<T>);
 
 impl<T> Drop for OwnedUserData<T>
 where
     T: UserData,
 {
     fn drop(&mut self) {
-        unsafe { sys::luaL_unref(self.0, sys::LUA_REGISTRYINDEX, self.1) }
+        let ptr = self.0.state_or_null();
+        if !ptr.is_null() {
+            unsafe { sys::luaL_unref(self.0.state(), sys::LUA_REGISTRYINDEX, self.1) }
+        }
     }
 }
 
@@ -31,18 +34,19 @@ where
         Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
     }
 
-    pub fn owned(ptr: *mut sys::lua_State, idx: i32) -> Self {
+    pub fn owned(inner: Rc<InnerLua>, idx: i32) -> Self {
         unsafe {
+            let ptr = inner.state();
             let idx = sys::lua_absindex(ptr, idx);
             sys::lua_pushvalue(ptr, idx);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Self::Owned(Rc::new(OwnedUserData(ptr, id, PhantomData)))
+            Self::Owned(Rc::new(OwnedUserData(inner, id, PhantomData)))
         }
     }
 
     pub fn to_owned(&self) -> Self {
         match self {
-            Ud::Borrowed(ptr, idx) => Self::owned(*ptr, *idx),
+            Ud::Borrowed(ptr, idx) => Self::owned(InnerLua::from_ptr(*ptr), *idx),
             Ud::Owned(ud) => Self::Owned(ud.clone()),
         }
     }
@@ -55,7 +59,7 @@ where
                 cell.borrow()
             },
             Ud::Owned(ud) => unsafe {
-                let (ptr, id) = (ud.0, ud.1);
+                let (ptr, id) = (ud.0.state(), ud.1);
 
                 sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id as _);
                 let ud_ptr = sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
@@ -75,7 +79,7 @@ where
                 cell.borrow_mut()
             },
             Ud::Owned(ud) => unsafe {
-                let (ptr, id) = (ud.0, ud.1);
+                let (ptr, id) = (ud.0.state(), ud.1);
 
                 sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id as _);
                 let ud_ptr = sys::lua_touserdata(ptr, -1) as *mut *mut RefCell<T>;
@@ -166,7 +170,7 @@ where
 
             sys::lua_pop(ptr, 2);
 
-            let value = Some(Self::owned(ptr, idx));
+            let value = Some(Self::owned(InnerLua::from_ptr(ptr), idx));
             sys::lua_pop(ptr, 1);
             value
         }

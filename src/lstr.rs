@@ -1,20 +1,23 @@
 use std::{marker::PhantomData, rc::Rc};
 
-use crate::{Borrowed, Mode, Owned, from_lua::FromLua, sys, to_lua::ToLua};
+use crate::{Borrowed, Mode, Owned, from_lua::FromLua, lua::InnerLua, sys, to_lua::ToLua};
 
 pub type StackStr = LStr<Borrowed>;
 
 pub type StrRef = LStr<Owned>;
 
 #[derive(Debug)]
-pub struct OwnedLStr<M: Mode>(*mut sys::lua_State, i32, PhantomData<M>);
+pub struct OwnedLStr<M: Mode>(Rc<InnerLua>, i32, PhantomData<M>);
 
 impl<M> Drop for OwnedLStr<M>
 where
     M: Mode,
 {
     fn drop(&mut self) {
-        unsafe { sys::luaL_unref(self.0, sys::LUA_REGISTRYINDEX, self.1) };
+        let ptr = self.0.state_or_null();
+        if !ptr.is_null() {
+            unsafe { sys::luaL_unref(self.0.state(), sys::LUA_REGISTRYINDEX, self.1) };
+        }
     }
 }
 
@@ -28,27 +31,29 @@ impl<M> LStr<M>
 where
     M: Mode,
 {
-    pub(crate) fn new(ptr: *mut sys::lua_State, value: &str) -> Self {
+    pub(crate) fn new(inner: Rc<InnerLua>, value: &str) -> Self {
+        let ptr = inner.state();
         value.to_lua(ptr);
         let id = unsafe { sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX) };
-        Self::Owned(Rc::new(OwnedLStr(ptr, id, PhantomData)))
+        Self::Owned(Rc::new(OwnedLStr(inner, id, PhantomData)))
     }
 
     pub fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
         Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
     }
 
-    pub fn owned(ptr: *mut sys::lua_State, idx: i32) -> Self {
+    pub fn owned(inner: Rc<InnerLua>, idx: i32) -> Self {
         unsafe {
+            let ptr = inner.state();
             sys::lua_pushvalue(ptr, idx);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Self::Owned(Rc::new(OwnedLStr(ptr, id, PhantomData)))
+            Self::Owned(Rc::new(OwnedLStr(inner, id, PhantomData)))
         }
     }
 
     pub fn to_owned(&self) -> Self {
         match self {
-            LStr::Borrowed(ptr, idx) => Self::owned(*ptr, *idx),
+            LStr::Borrowed(ptr, idx) => Self::owned(InnerLua::from_ptr(*ptr), *idx),
             LStr::Owned(inner) => Self::Owned(inner.clone()),
         }
     }
@@ -60,8 +65,9 @@ where
                 *ptr
             }
             LStr::Owned(inner) => {
-                unsafe { sys::lua_rawgeti(inner.0, sys::LUA_REGISTRYINDEX, inner.1 as _) };
-                inner.0
+                let ptr = inner.0.state();
+                unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _) };
+                ptr
             }
         };
 
@@ -108,7 +114,7 @@ impl FromLua for StrRef {
 
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
-            Some(Self::owned(ptr, idx))
+            Some(Self::owned(InnerLua::from_ptr(ptr), idx))
         } else {
             None
         }

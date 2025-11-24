@@ -12,6 +12,7 @@ use crate::{
     Borrowed, Mode, Owned,
     from_lua::FromLua,
     is_type::IsType,
+    lua::InnerLua,
     sys,
     table::{constraints::TableKey, view::TableView},
     to_lua::ToLua,
@@ -22,14 +23,17 @@ pub type StackTable = Table<Borrowed>;
 pub type TableRef = Table<Owned>;
 
 #[derive(Debug)]
-pub struct OwnedTable<M: Mode>(*mut sys::lua_State, i32, PhantomData<M>);
+pub struct OwnedTable<M: Mode>(Rc<InnerLua>, i32, PhantomData<M>);
 
 impl<M> Drop for OwnedTable<M>
 where
     M: Mode,
 {
     fn drop(&mut self) {
-        unsafe { sys::luaL_unref(self.0, sys::LUA_REGISTRYINDEX, self.1) };
+        let ptr = self.0.state_or_null();
+        if !ptr.is_null() {
+            unsafe { sys::luaL_unref(self.0.state(), sys::LUA_REGISTRYINDEX, self.1) };
+        }
     }
 }
 
@@ -43,11 +47,12 @@ impl<M> Table<M>
 where
     M: Mode,
 {
-    pub fn new(ptr: *mut sys::lua_State) -> Self {
+    pub fn new(inner_lua: Rc<InnerLua>) -> Self {
         unsafe {
+            let ptr = inner_lua.state();
             sys::lua_newtable(ptr);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Self::Owned(Rc::new(OwnedTable(ptr, id, PhantomData)))
+            Self::Owned(Rc::new(OwnedTable(inner_lua, id, PhantomData)))
         }
     }
 
@@ -57,9 +62,10 @@ where
 
     pub fn owned(ptr: *mut sys::lua_State, idx: i32) -> Self {
         unsafe {
+            let inner = InnerLua::from_ptr(ptr);
             sys::lua_pushvalue(ptr, idx);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Self::Owned(Rc::new(OwnedTable(ptr, id, PhantomData)))
+            Self::Owned(Rc::new(OwnedTable(inner, id, PhantomData)))
         }
     }
 
@@ -77,8 +83,9 @@ where
                 *ptr
             },
             Table::Owned(inner) => unsafe {
-                sys::lua_rawgeti(inner.0, sys::LUA_REGISTRYINDEX, inner.1 as _);
-                inner.0
+                let ptr = inner.0.state();
+                sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
+                ptr
             },
         };
 
@@ -95,8 +102,9 @@ where
                 *ptr
             },
             Table::Owned(inner) => unsafe {
-                sys::lua_rawgeti(inner.0, sys::LUA_REGISTRYINDEX, inner.1 as _);
-                inner.0
+                let ptr = inner.0.state();
+                sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
+                ptr
             },
         };
 
@@ -123,8 +131,9 @@ where
                 *ptr
             },
             Table::Owned(inner) => unsafe {
-                sys::lua_rawgeti(inner.0, sys::LUA_REGISTRYINDEX, inner.1 as _);
-                inner.0
+                let ptr = inner.0.state();
+                sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
+                ptr
             },
         };
         let len = unsafe { sys::lua_objlen(ptr, -1) };
