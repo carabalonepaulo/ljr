@@ -101,8 +101,9 @@ impl InnerLua {
         ptr
     }
 
-    pub(crate) fn state_or_null(&self) -> *mut sys::lua_State {
-        self.state.get()
+    pub(crate) fn try_state(&self) -> Option<*mut sys::lua_State> {
+        let ptr = self.state.get();
+        if ptr.is_null() { None } else { Some(ptr) }
     }
 }
 

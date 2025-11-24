@@ -21,9 +21,8 @@ where
     T: UserData,
 {
     fn drop(&mut self) {
-        let ptr = self.0.state_or_null();
-        if !ptr.is_null() {
-            unsafe { sys::luaL_unref(self.0.state(), sys::LUA_REGISTRYINDEX, self.1) }
+        if let Some(ptr) = self.0.try_state() {
+            unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.1) }
         }
     }
 }
