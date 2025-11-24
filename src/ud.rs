@@ -181,6 +181,23 @@ where
     }
 }
 
+impl<M, T> ToLua for &Ud<M, T>
+where
+    M: Mode,
+    T: UserData,
+{
+    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+        unsafe {
+            match self {
+                Ud::Borrowed(_, idx) => sys::lua_pushvalue(ptr, *idx),
+                Ud::Owned(ud) => {
+                    sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, ud.1 as _);
+                }
+            }
+        }
+    }
+}
+
 impl<M, T> ToLua for Ud<M, T>
 where
     M: Mode,

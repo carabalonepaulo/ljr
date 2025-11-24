@@ -137,6 +137,24 @@ where
     }
 }
 
+impl<M, I, O> ToLua for &Func<M, I, O>
+where
+    M: Mode,
+    I: FromLua + ToLua,
+    O: FromLua + ToLua,
+{
+    fn to_lua(self, ptr: *mut sys::lua_State) {
+        unsafe {
+            match self {
+                Func::Borrowed(_, idx) => sys::lua_pushvalue(ptr, *idx),
+                Func::Owned(inner) => {
+                    sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
+                }
+            }
+        }
+    }
+}
+
 impl<M, I, O> ToLua for Func<M, I, O>
 where
     M: Mode,

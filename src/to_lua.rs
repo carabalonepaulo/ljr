@@ -75,7 +75,6 @@ where
                 sys::lua_pushstring(ptr, name);
                 sys::lua_setfield(ptr, mt_idx, c"__name".as_ptr());
 
-                // unsafe extern "C" fn __gc<T: UserData>(ptr: *mut crate::sys::lua_State) -> i32 {
                 unsafe extern "C-unwind" fn __gc<T: UserData>(
                     ptr: *mut crate::sys::lua_State,
                 ) -> i32 {

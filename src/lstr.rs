@@ -116,6 +116,22 @@ impl FromLua for StrRef {
     }
 }
 
+impl<M> ToLua for &LStr<M>
+where
+    M: Mode,
+{
+    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+        match self {
+            LStr::Borrowed(_, idx) => unsafe {
+                sys::lua_pushvalue(ptr, *idx);
+            },
+            LStr::Owned(inner) => unsafe {
+                sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
+            },
+        }
+    }
+}
+
 impl<M> ToLua for LStr<M>
 where
     M: Mode,
