@@ -1,6 +1,6 @@
 #![allow(unused)]
 
-use proc_macro2::{Span, TokenStream, TokenTree};
+use proc_macro2::{Delimiter, Span, TokenStream, TokenTree};
 use syn::Ident;
 use venial::TypeExpr;
 
@@ -46,6 +46,65 @@ impl TypeInfo {
     }
 }
 
+fn clean_name_from_stream(stream: TokenStream) -> String {
+    let mut output = String::new();
+    let mut iter = stream.into_iter().peekable();
+    let mut pending_ident: Option<String> = None;
+
+    while let Some(token) = iter.next() {
+        match token {
+            TokenTree::Ident(ident) => {
+                if let Some(prev) = pending_ident.take() {
+                    output.push_str(&prev);
+                }
+                pending_ident = Some(ident.to_string());
+            }
+            TokenTree::Punct(p) if p.as_char() == ':' => {
+                if let Some(TokenTree::Punct(p2)) = iter.peek() {
+                    if p2.as_char() == ':' {
+                        iter.next();
+                        pending_ident = None;
+                        continue;
+                    }
+                }
+                if let Some(prev) = pending_ident.take() {
+                    output.push_str(&prev);
+                }
+                output.push(':');
+            }
+            TokenTree::Punct(p) => {
+                if let Some(prev) = pending_ident.take() {
+                    output.push_str(&prev);
+                }
+                output.push(p.as_char());
+            }
+            TokenTree::Group(g) => {
+                if let Some(prev) = pending_ident.take() {
+                    output.push_str(&prev);
+                }
+
+                let content = clean_name_from_stream(g.stream());
+                match g.delimiter() {
+                    Delimiter::Parenthesis => output.push_str(&format!("({})", content)),
+                    Delimiter::Bracket => output.push_str(&format!("[{}]", content)),
+                    Delimiter::Brace => output.push_str(&format!("{{{}}}", content)),
+                    Delimiter::None => output.push_str(&content),
+                }
+            }
+            TokenTree::Literal(l) => {
+                if let Some(prev) = pending_ident.take() {
+                    output.push_str(&prev);
+                }
+                output.push_str(&l.to_string());
+            }
+        }
+    }
+    if let Some(last) = pending_ident {
+        output.push_str(&last);
+    }
+    output
+}
+
 pub fn parse_type_expr(ty: &TypeExpr) -> Option<(TypeExpr, String, Option<Ref>, bool)> {
     let mut iter = ty.tokens.iter().peekable();
 
@@ -84,7 +143,16 @@ pub fn parse_type_expr(ty: &TypeExpr) -> Option<(TypeExpr, String, Option<Ref>, 
 
     if let Some(TokenTree::Group(g)) = iter.peek() {
         let group_token = g.clone();
-        let name = group_token.to_string().replace(" ", "");
+
+        let inner_name = clean_name_from_stream(group_token.stream());
+
+        let name = match group_token.delimiter() {
+            Delimiter::Parenthesis => format!("({})", inner_name),
+            Delimiter::Bracket => format!("[{}]", inner_name),
+            Delimiter::Brace => format!("{{{}}}", inner_name),
+            Delimiter::None => inner_name,
+        };
+
         iter.next();
         let inner_type_expr = TypeExpr {
             tokens: vec![TokenTree::Group(group_token)],
@@ -92,7 +160,7 @@ pub fn parse_type_expr(ty: &TypeExpr) -> Option<(TypeExpr, String, Option<Ref>, 
         return Some((inner_type_expr, name, ref_type, has_lifetime));
     }
 
-    let mut path_tokens = Vec::new();
+    let mut path_tokens: Vec<TokenTree> = Vec::new();
     let mut last_ident_token: Option<Ident> = None;
 
     while let Some(token) = iter.peek() {
@@ -125,11 +193,12 @@ pub fn parse_type_expr(ty: &TypeExpr) -> Option<(TypeExpr, String, Option<Ref>, 
     }
 
     let generics_stream = TokenStream::from_iter(generics_tokens.iter().cloned());
-    let generics_str = generics_stream.to_string().replace(" ", "");
+    let generics_str = clean_name_from_stream(generics_stream);
+
     let full_name = format!("{}{}", final_name_str, generics_str);
 
     let mut clean_tokens = path_tokens;
-    clean_tokens.extend(generics_tokens.iter().cloned());
+    clean_tokens.extend(generics_tokens);
 
     let inner_type_expr = TypeExpr {
         tokens: clean_tokens,
@@ -168,6 +237,12 @@ mod tests {
         assert_eq!(name, "Table<Borrowed>");
         assert_eq!(rf, None);
         assert_eq!(lt, false);
+    }
+
+    #[test]
+    fn test_path_removal_generic() {
+        let (_, name, _, _) = parse_type_expr(&to_expr(quote!(Table<std::vec::Vec<T>>))).unwrap();
+        assert_eq!(name, "Table<Vec<T>>");
     }
 
     #[test]
@@ -248,6 +323,17 @@ mod tests {
         assert!(result.is_some());
 
         let result = parse_type_expr(&to_expr(quote!((String, bool, &StackFn))));
+        assert!(result.is_some());
+
+        let (ty, name, rf, lt) = result.unwrap();
+        assert_eq!(name, "(String,bool,&StackFn)");
+        assert_eq!(rf, None);
+        assert_eq!(lt, false);
+    }
+
+    #[test]
+    fn test_complex_tuple() {
+        let result = parse_type_expr(&to_expr(quote!((String, bool, &ljr::StackFn))));
         assert!(result.is_some());
 
         let (ty, name, rf, lt) = result.unwrap();
