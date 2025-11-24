@@ -273,6 +273,15 @@ mod tests {
     }
 
     #[test]
+    fn test_slice() {
+        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&[u8]))).unwrap();
+        assert_tokens_eq(&inner_ty, "[u8]");
+        assert_eq!(name, "[u8]");
+        assert_eq!(rf, Some(Ref::Shared));
+        assert_eq!(lt, false);
+    }
+
+    #[test]
     fn test_lifetime_mut() {
         let (inner_ty, name, rf, lt) =
             parse_type_expr(&to_expr(quote!(&'ctx mut ljr::Table<T>))).unwrap();
