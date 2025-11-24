@@ -63,7 +63,10 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                         FnParam::Receiver(_) => Some(quote! { <#ud_ty as ljr::from_lua::FromLua>::len() }),
                         FnParam::Typed(ty) => {
                             let arg_ty = &ty.ty;
-                            let type_info = TypeInfo::new(arg_ty);
+                            let Some(type_info) = TypeInfo::new(arg_ty) else {
+                                let ty_str = quote!(#arg_ty).to_string().replace(" ", "");
+                                panic!("invalid type {}", ty_str);
+                            };
                             let ty_name = type_info.name();
                             let inner_ty = type_info.inner_ty();
 
@@ -95,7 +98,10 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                 FnParam::Typed(ty) => {
                     let arg_name = &ty.name;
                     let arg_ty = &ty.ty;
-                    let type_info = TypeInfo::new(&arg_ty);
+                    let Some(type_info) = TypeInfo::new(arg_ty) else {
+                        let ty_str = quote!(#arg_ty).to_string().replace(" ", "");
+                        panic!("invalid type {}", ty_str);
+                    };
                     let is_ref = type_info.ref_kind().is_some();
                     let arg_name_str = type_info.name();
 

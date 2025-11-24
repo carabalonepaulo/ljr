@@ -19,14 +19,14 @@ pub struct TypeInfo {
 }
 
 impl TypeInfo {
-    pub fn new(ty: &TypeExpr) -> Self {
-        let (inner_ty, name, ref_kind, has_lifetime) = parse_type_expr(ty);
-        Self {
+    pub fn new(ty: &TypeExpr) -> Option<Self> {
+        let (inner_ty, name, ref_kind, has_lifetime) = parse_type_expr(ty)?;
+        Some(Self {
             inner_ty,
             name,
             ref_kind,
             has_lifetime,
-        }
+        })
     }
 
     pub fn inner_ty(&self) -> &TypeExpr {
@@ -42,11 +42,11 @@ impl TypeInfo {
     }
 
     pub fn has_lifetime(&self) -> bool {
-        false
+        self.has_lifetime
     }
 }
 
-pub fn parse_type_expr(ty: &TypeExpr) -> (TypeExpr, String, Option<Ref>, bool) {
+pub fn parse_type_expr(ty: &TypeExpr) -> Option<(TypeExpr, String, Option<Ref>, bool)> {
     let mut iter = ty.tokens.iter().peekable();
 
     let mut ref_type = None;
@@ -76,18 +76,38 @@ pub fn parse_type_expr(ty: &TypeExpr) -> (TypeExpr, String, Option<Ref>, bool) {
         }
     }
 
+    if let Some(TokenTree::Punct(p)) = iter.peek() {
+        if p.as_char() == '&' {
+            return None;
+        }
+    }
+
+    if let Some(TokenTree::Group(g)) = iter.peek() {
+        let group_token = g.clone();
+        let name = group_token.to_string().replace(" ", "");
+        iter.next();
+        let inner_type_expr = TypeExpr {
+            tokens: vec![TokenTree::Group(group_token)],
+        };
+        return Some((inner_type_expr, name, ref_type, has_lifetime));
+    }
+
+    let mut path_tokens = Vec::new();
     let mut last_ident_token: Option<Ident> = None;
 
     while let Some(token) = iter.peek() {
         match token {
             TokenTree::Ident(ident) => {
                 last_ident_token = Some(ident.clone());
+                path_tokens.push((*token).clone());
                 iter.next();
             }
             TokenTree::Punct(p) if p.as_char() == ':' => {
+                path_tokens.push((*token).clone());
                 iter.next();
                 if let Some(TokenTree::Punct(p2)) = iter.peek() {
                     if p2.as_char() == ':' {
+                        path_tokens.push(TokenTree::Punct(p2.clone()));
                         iter.next();
                     }
                 }
@@ -96,11 +116,10 @@ pub fn parse_type_expr(ty: &TypeExpr) -> (TypeExpr, String, Option<Ref>, bool) {
         }
     }
 
-    let final_ident = last_ident_token.unwrap_or_else(|| Ident::new("Unknown", Span::call_site()));
+    let final_ident = last_ident_token?;
     let final_name_str = final_ident.to_string();
 
     let mut generics_tokens = Vec::new();
-
     while let Some(t) = iter.next() {
         generics_tokens.push(t.clone());
     }
@@ -109,14 +128,14 @@ pub fn parse_type_expr(ty: &TypeExpr) -> (TypeExpr, String, Option<Ref>, bool) {
     let generics_str = generics_stream.to_string().replace(" ", "");
     let full_name = format!("{}{}", final_name_str, generics_str);
 
-    let mut clean_tokens = vec![TokenTree::Ident(final_ident)];
-    clean_tokens.extend(generics_tokens);
+    let mut clean_tokens = path_tokens;
+    clean_tokens.extend(generics_tokens.iter().cloned());
 
     let inner_type_expr = TypeExpr {
         tokens: clean_tokens,
     };
 
-    (inner_type_expr, full_name, ref_type, has_lifetime)
+    Some((inner_type_expr, full_name, ref_type, has_lifetime))
 }
 
 #[cfg(test)]
@@ -137,7 +156,7 @@ mod tests {
 
     #[test]
     fn test_simple() {
-        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(StackFn)));
+        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(StackFn))).unwrap();
         assert_eq!(name, "StackFn");
         assert_eq!(rf, None);
         assert_eq!(lt, false);
@@ -145,7 +164,7 @@ mod tests {
 
     #[test]
     fn test_generics() {
-        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(Table<Borrowed>)));
+        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(Table<Borrowed>))).unwrap();
         assert_eq!(name, "Table<Borrowed>");
         assert_eq!(rf, None);
         assert_eq!(lt, false);
@@ -153,7 +172,7 @@ mod tests {
 
     #[test]
     fn test_ref_shared() {
-        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&Table<Borrowed>)));
+        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&Table<Borrowed>))).unwrap();
         assert_tokens_eq(&inner_ty, "Table<Borrowed>");
         assert_eq!(name, "Table<Borrowed>");
         assert_eq!(rf, Some(Ref::Shared));
@@ -162,7 +181,7 @@ mod tests {
 
     #[test]
     fn test_ref_mut() {
-        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&mut TableRef)));
+        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&mut TableRef))).unwrap();
         assert_tokens_eq(&inner_ty, "TableRef");
         assert_eq!(name, "TableRef");
         assert_eq!(rf, Some(Ref::Mut));
@@ -171,7 +190,7 @@ mod tests {
 
     #[test]
     fn test_lifetime_shared() {
-        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&'a MyType)));
+        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&'a MyType))).unwrap();
         assert_tokens_eq(&inner_ty, "MyType");
         assert_eq!(name, "MyType");
         assert_eq!(rf, Some(Ref::Shared));
@@ -180,8 +199,9 @@ mod tests {
 
     #[test]
     fn test_lifetime_mut() {
-        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&'ctx mut ljr::Table<T>)));
-        assert_tokens_eq(&inner_ty, "Table<T>");
+        let (inner_ty, name, rf, lt) =
+            parse_type_expr(&to_expr(quote!(&'ctx mut ljr::Table<T>))).unwrap();
+        assert_tokens_eq(&inner_ty, "ljr::Table<T>");
         assert_eq!(name, "Table<T>");
         assert_eq!(rf, Some(Ref::Mut));
         assert_eq!(lt, true);
@@ -189,9 +209,50 @@ mod tests {
 
     #[test]
     fn test_is_ref() {
-        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&StackStr)));
+        let (inner_ty, name, rf, lt) = parse_type_expr(&to_expr(quote!(&StackStr))).unwrap();
         assert_tokens_eq(&inner_ty, "StackStr");
         assert_eq!(name, "StackStr");
         assert!(rf.is_some());
+    }
+
+    #[test]
+    fn test_is_double_ref() {
+        let result = parse_type_expr(&to_expr(quote!(&&StackStr)));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_nested_mut_ref() {
+        let result = parse_type_expr(&to_expr(quote!(&mut &StackStr)));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_double_ref_with_path() {
+        let result = parse_type_expr(&to_expr(quote!(&&ljr::lstr::StackStr)));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_double_ref_with_lifetime() {
+        let result = parse_type_expr(&to_expr(quote!(&'a &StackStr)));
+        assert!(result.is_none());
+
+        let result = parse_type_expr(&to_expr(quote!(&&'a StackStr)));
+        assert!(result.is_none());
+    }
+
+    #[test]
+    fn test_tuple() {
+        let result = parse_type_expr(&to_expr(quote!((i32, i32))));
+        assert!(result.is_some());
+
+        let result = parse_type_expr(&to_expr(quote!((String, bool, &StackFn))));
+        assert!(result.is_some());
+
+        let (ty, name, rf, lt) = result.unwrap();
+        assert_eq!(name, "(String,bool,&StackFn)");
+        assert_eq!(rf, None);
+        assert_eq!(lt, false);
     }
 }
