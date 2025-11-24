@@ -120,7 +120,7 @@ where
     }
 }
 
-impl<T> FromLua for T
+impl<T> FromLua for StackUd<T>
 where
     T: UserData,
 {
@@ -152,12 +152,11 @@ where
     }
 }
 
-impl<M, T> FromLua for Ud<M, T>
+impl<T> FromLua for UdRef<T>
 where
-    M: Mode,
     T: UserData,
 {
-    type Output = Ud<M, T>;
+    type Output = UdRef<T>;
 
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
         unsafe {

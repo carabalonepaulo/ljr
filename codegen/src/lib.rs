@@ -60,7 +60,9 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
             let len_expr_list: Vec<TokenStream> = m.params.iter()
                 .filter_map(|p| {
                     match &p.0 {
-                        FnParam::Receiver(_) => Some(quote! { <#ud_ty as ljr::from_lua::FromLua>::len() }),
+                        FnParam::Receiver(_) => {
+                            Some(quote! { <StackUd<#ud_ty> as ljr::from_lua::FromLua>::len() })
+                        },
                         FnParam::Typed(ty) => {
                             let arg_ty = &ty.ty;
                             let Some(type_info) = TypeInfo::new(arg_ty) else {
@@ -76,8 +78,10 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                     None
                                 } else if ty_name == "str" {
                                     Some(quote! { <ljr::lstr::StackStr as ljr::from_lua::FromLua>::len() })
-                                } else {
+                                } else if SPECIAL_TYPES.iter().any(|n| type_info.name().starts_with(n)) {
                                     Some(quote! { <#inner_ty as ljr::from_lua::FromLua>::len() })
+                                } else {
+                                    Some(quote! { <StackUd<#inner_ty> as ljr::from_lua::FromLua>::len() })
                                 }
                             } else {
                                 Some(quote! { <#arg_ty as ljr::from_lua::FromLua>::len() })

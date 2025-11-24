@@ -45,9 +45,9 @@ pub fn from_lua_stack_ref<T>(ptr: *mut sys::lua_State, idx: &mut i32) -> StackUd
 where
     T: UserData,
 {
-    match <T as crate::from_lua::FromLua>::from_lua(ptr, *idx) {
+    match <StackUd<T> as crate::from_lua::FromLua>::from_lua(ptr, *idx) {
         Some(value) => {
-            *idx += <T as crate::from_lua::FromLua>::len();
+            *idx += <StackUd<T> as crate::from_lua::FromLua>::len();
             value
         }
         None => {
