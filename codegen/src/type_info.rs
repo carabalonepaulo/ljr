@@ -16,16 +16,20 @@ pub struct TypeInfo {
     name: String,
     ref_kind: Option<Ref>,
     has_lifetime: bool,
+    generics: Vec<TypeInfo>,
 }
 
 impl TypeInfo {
     pub fn new(ty: &TypeExpr) -> Option<Self> {
         let (inner_ty, name, ref_kind, has_lifetime) = parse_type_expr(ty)?;
+        let generics = parse_generics(&inner_ty);
+
         Some(Self {
             inner_ty,
             name,
             ref_kind,
             has_lifetime,
+            generics,
         })
     }
 
@@ -44,6 +48,75 @@ impl TypeInfo {
     pub fn has_lifetime(&self) -> bool {
         self.has_lifetime
     }
+
+    pub fn generics(&self) -> &[TypeInfo] {
+        &self.generics
+    }
+}
+
+fn parse_generics(ty: &TypeExpr) -> Vec<TypeInfo> {
+    let tokens = &ty.tokens;
+    let start_idx = tokens.iter().position(|t| match t {
+        TokenTree::Punct(p) if p.as_char() == '<' => true,
+        _ => false,
+    });
+
+    let end_idx = tokens.iter().rposition(|t| match t {
+        TokenTree::Punct(p) if p.as_char() == '>' => true,
+        _ => false,
+    });
+
+    match (start_idx, end_idx) {
+        (Some(start), Some(end)) if start < end => {
+            let content = &tokens[start + 1..end];
+            let args_tokens = split_type_args(content);
+
+            args_tokens
+                .into_iter()
+                .filter_map(|tks| {
+                    let expr = TypeExpr { tokens: tks };
+                    TypeInfo::new(&expr)
+                })
+                .collect()
+        }
+        _ => vec![],
+    }
+}
+
+fn split_type_args(tokens: &[TokenTree]) -> Vec<Vec<TokenTree>> {
+    let mut args = Vec::new();
+    let mut current_arg = Vec::new();
+    let mut depth = 0;
+
+    for token in tokens {
+        match token {
+            TokenTree::Punct(p) if p.as_char() == ',' && depth == 0 => {
+                if !current_arg.is_empty() {
+                    args.push(current_arg);
+                    current_arg = Vec::new();
+                }
+            }
+            TokenTree::Punct(p) if p.as_char() == '<' => {
+                depth += 1;
+                current_arg.push(token.clone());
+            }
+            TokenTree::Punct(p) if p.as_char() == '>' => {
+                if depth > 0 {
+                    depth -= 1;
+                }
+                current_arg.push(token.clone());
+            }
+            _ => {
+                current_arg.push(token.clone());
+            }
+        }
+    }
+
+    if !current_arg.is_empty() {
+        args.push(current_arg);
+    }
+
+    args
 }
 
 fn clean_name_from_stream(stream: TokenStream) -> String {
@@ -143,7 +216,6 @@ pub fn parse_type_expr(ty: &TypeExpr) -> Option<(TypeExpr, String, Option<Ref>, 
 
     if let Some(TokenTree::Group(g)) = iter.peek() {
         let group_token = g.clone();
-
         let inner_name = clean_name_from_stream(group_token.stream());
 
         let name = match group_token.delimiter() {
@@ -349,5 +421,76 @@ mod tests {
         assert_eq!(name, "(String,bool,&StackFn)");
         assert_eq!(rf, None);
         assert_eq!(lt, false);
+    }
+
+    #[test]
+    fn test_basic_generic_recursion() {
+        let ty = TypeInfo::new(&to_expr(quote!(Option<StackStr>))).unwrap();
+
+        assert_eq!(ty.name(), "Option<StackStr>");
+        assert_eq!(ty.generics.len(), 1);
+
+        let inner = &ty.generics[0];
+        assert_eq!(inner.name(), "StackStr");
+        assert!(inner.generics.is_empty());
+    }
+
+    #[test]
+    fn test_nested_generics() {
+        let ty = TypeInfo::new(&to_expr(quote!(Result<Vec<i32>, std::io::Error>))).unwrap();
+
+        assert_eq!(ty.name(), "Result<Vec<i32>,Error>");
+        assert_eq!(ty.generics.len(), 2);
+
+        let gen1 = &ty.generics[0];
+        assert_eq!(gen1.name(), "Vec<i32>");
+        assert_eq!(gen1.generics.len(), 1);
+
+        let gen1_inner = &gen1.generics[0];
+        assert_eq!(gen1_inner.name(), "i32");
+
+        let gen2 = &ty.generics[1];
+        assert_eq!(gen2.name(), "Error");
+        assert!(gen2.generics.is_empty());
+    }
+
+    #[test]
+    fn test_ref_generics() {
+        let ty = TypeInfo::new(&to_expr(quote!(&mut Option<&i32>))).unwrap();
+
+        assert_eq!(ty.ref_kind(), Some(Ref::Mut));
+        assert_eq!(ty.name(), "Option<&i32>");
+        assert_eq!(ty.generics.len(), 1);
+
+        let inner = &ty.generics[0];
+        assert_eq!(inner.name(), "i32");
+        assert_eq!(inner.ref_kind(), Some(Ref::Shared));
+    }
+
+    #[test]
+    fn test_complex_path_generics() {
+        let ty = TypeInfo::new(&to_expr(quote!(std::collections::HashMap<String, i32>))).unwrap();
+
+        assert_eq!(ty.name(), "HashMap<String,i32>");
+        assert_eq!(ty.generics.len(), 2);
+        assert_eq!(ty.generics[0].name(), "String");
+        assert_eq!(ty.generics[1].name(), "i32");
+    }
+
+    #[test]
+    fn test_deeply_nested() {
+        let ty = TypeInfo::new(&to_expr(quote!(A<B<C<D>>>))).unwrap();
+        assert_eq!(ty.name(), "A<B<C<D>>>");
+        assert_eq!(ty.generics.len(), 1);
+
+        let b = &ty.generics[0];
+        assert_eq!(b.name(), "B<C<D>>");
+
+        let c = &b.generics[0];
+        assert_eq!(c.name(), "C<D>");
+
+        let d = &c.generics[0];
+        assert_eq!(d.name(), "D");
+        assert!(d.generics.is_empty());
     }
 }
