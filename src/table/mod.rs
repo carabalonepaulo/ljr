@@ -47,7 +47,7 @@ impl<M> Table<M>
 where
     M: Mode,
 {
-    pub fn new(inner_lua: Rc<InnerLua>) -> Self {
+    pub(crate) fn new(inner_lua: Rc<InnerLua>) -> Self {
         unsafe {
             let ptr = inner_lua.state();
             sys::lua_newtable(ptr);
@@ -56,11 +56,11 @@ where
         }
     }
 
-    pub fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
+    pub(crate) fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
         Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
     }
 
-    pub fn owned(ptr: *mut sys::lua_State, idx: i32) -> Self {
+    pub(crate) fn owned(ptr: *mut sys::lua_State, idx: i32) -> Self {
         unsafe {
             let inner = InnerLua::from_ptr(ptr);
             sys::lua_pushvalue(ptr, idx);

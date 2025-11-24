@@ -38,11 +38,11 @@ where
     M: Mode,
     T: UserData,
 {
-    pub fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
+    pub(crate) fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
         Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
     }
 
-    pub fn owned(inner: Rc<InnerLua>, idx: i32) -> Self {
+    pub(crate) fn owned(inner: Rc<InnerLua>, idx: i32) -> Self {
         unsafe {
             let ptr = inner.state();
             let idx = sys::lua_absindex(ptr, idx);
