@@ -5,12 +5,19 @@ use std::{
     rc::Rc,
 };
 
-use crate::{UserData, from_lua::FromLua, lua::InnerLua, sys, to_lua::ToLua};
+use crate::{
+    Borrowed, Mode, Owned, UserData, from_lua::FromLua, lua::InnerLua, sys, to_lua::ToLua,
+};
 
-pub struct OwnedUserData<T: UserData>(Rc<InnerLua>, i32, PhantomData<T>);
+pub type StackUd<T> = Ud<Borrowed, T>;
 
-impl<T> Drop for OwnedUserData<T>
+pub type UdRef<T> = Ud<Owned, T>;
+
+pub struct OwnedUserData<M: Mode, T: UserData>(Rc<InnerLua>, i32, PhantomData<(M, T)>);
+
+impl<M, T> Drop for OwnedUserData<M, T>
 where
+    M: Mode,
     T: UserData,
 {
     fn drop(&mut self) {
@@ -21,13 +28,14 @@ where
     }
 }
 
-pub enum Ud<T: UserData> {
+pub enum Ud<M: Mode, T: UserData> {
     Borrowed(*mut sys::lua_State, i32),
-    Owned(Rc<OwnedUserData<T>>),
+    Owned(Rc<OwnedUserData<M, T>>),
 }
 
-impl<T> Ud<T>
+impl<M, T> Ud<M, T>
 where
+    M: Mode,
     T: UserData,
 {
     pub fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
@@ -102,8 +110,9 @@ where
     }
 }
 
-impl<T> Clone for Ud<T>
+impl<M, T> Clone for Ud<M, T>
 where
+    M: Mode,
     T: UserData,
 {
     fn clone(&self) -> Self {
@@ -115,7 +124,7 @@ impl<T> FromLua for T
 where
     T: UserData,
 {
-    type Output = Ud<T>;
+    type Output = Ud<Borrowed, T>;
 
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
         unsafe {
@@ -139,15 +148,16 @@ where
             sys::lua_pop(ptr, 2);
         }
 
-        Some(Ud::<T>::borrowed(ptr, idx))
+        Some(Ud::<Borrowed, T>::borrowed(ptr, idx))
     }
 }
 
-impl<T> FromLua for Ud<T>
+impl<M, T> FromLua for Ud<M, T>
 where
+    M: Mode,
     T: UserData,
 {
-    type Output = Ud<T>;
+    type Output = Ud<M, T>;
 
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
         unsafe {
@@ -177,8 +187,9 @@ where
     }
 }
 
-impl<T> ToLua for Ud<T>
+impl<M, T> ToLua for Ud<M, T>
 where
+    M: Mode,
     T: UserData,
 {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {

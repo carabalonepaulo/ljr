@@ -1,7 +1,7 @@
 use crate::UserData;
 
 use crate::sys;
-use crate::ud::Ud;
+use crate::ud::StackUd;
 
 macro_rules! lua_error {
     ($ptr:ident, $msg:expr) => {{
@@ -41,7 +41,7 @@ pub fn from_lua<T: crate::from_lua::FromLua>(
     }
 }
 
-pub fn from_lua_stack_ref<T>(ptr: *mut sys::lua_State, idx: &mut i32) -> Ud<T>
+pub fn from_lua_stack_ref<T>(ptr: *mut sys::lua_State, idx: &mut i32) -> StackUd<T>
 where
     T: UserData,
 {

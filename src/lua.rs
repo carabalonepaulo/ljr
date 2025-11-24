@@ -1,6 +1,13 @@
 use macros::generate_get_global_tuple_impl;
 
-use crate::{Borrowed, func::FnRef, lstr::StrRef, sys, table::TableRef, ud::Ud};
+use crate::{
+    Borrowed,
+    func::FnRef,
+    lstr::StrRef,
+    sys,
+    table::TableRef,
+    ud::{Ud, UdRef},
+};
 use std::{cell::Cell, ffi::CString, fmt::Display, ptr, rc::Rc};
 
 use crate::{
@@ -142,7 +149,7 @@ impl Lua {
         Table::new(self.inner.clone())
     }
 
-    pub fn create_ref<T: UserData>(&self, value: T) -> Ud<T> {
+    pub fn create_ref<T: UserData>(&self, value: T) -> UdRef<T> {
         let ptr = self.state();
         <T as ToLua>::to_lua(value, ptr);
         let ud = Ud::owned(self.inner.clone(), -1);
@@ -294,7 +301,7 @@ macro_rules! impl_get_global {
 
 impl_get_global!((), i32, f32, f64, bool, String, StrRef, TableRef);
 
-impl<T> ValueArg for Ud<T> where T: UserData {}
+impl<T> ValueArg for UdRef<T> where T: UserData {}
 
 impl<T> ValueArg for Option<T>
 where

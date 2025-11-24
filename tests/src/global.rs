@@ -53,7 +53,7 @@ fn test_get_global_luaref_userdata() {
     let r = lua.create_ref(Person { value: 7 });
     lua.set_global("person_ref", r.clone());
 
-    let got = lua.get_global::<Ud<Person>>("person_ref");
+    let got = lua.get_global::<UdRef<Person>>("person_ref");
 
     assert_eq!(lua.top(), 0);
     assert!(got.is_some());

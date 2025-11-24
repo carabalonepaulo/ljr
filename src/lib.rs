@@ -41,7 +41,7 @@ pub mod prelude {
     pub use crate::lstr::{StackStr, StrRef};
     pub use crate::lua::Lua;
     pub use crate::table::{StackTable, TableRef};
-    pub use crate::ud::Ud;
+    pub use crate::ud::{StackUd, UdRef};
     pub use macros::{module, user_data};
 }
 
