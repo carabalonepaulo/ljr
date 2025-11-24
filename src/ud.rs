@@ -124,9 +124,7 @@ impl<T> FromLua for StackUd<T>
 where
     T: UserData,
 {
-    type Output = Ud<Borrowed, T>;
-
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         unsafe {
             sys::lua_pushvalue(ptr, idx);
 
@@ -156,9 +154,7 @@ impl<T> FromLua for UdRef<T>
 where
     T: UserData,
 {
-    type Output = UdRef<T>;
-
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         unsafe {
             sys::lua_pushvalue(ptr, idx);
 

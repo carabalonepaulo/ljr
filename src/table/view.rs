@@ -16,7 +16,7 @@ impl<'t> TableView<'t> {
         unsafe { sys::lua_settable(self.0, self.1) };
     }
 
-    pub fn get<'a, T: FromLua>(&self, key: impl TableKey<'a>) -> Option<T::Output> {
+    pub fn get<'a, T: FromLua>(&self, key: impl TableKey<'a>) -> Option<T> {
         key.to_lua(self.0);
         unsafe { sys::lua_gettable(self.0, self.1) };
         let val = <T as FromLua>::from_lua(self.0, -1);
@@ -30,7 +30,7 @@ impl<'t> TableView<'t> {
         unsafe { sys::lua_rawseti(self.0, self.1, (len + 1) as _) };
     }
 
-    pub fn pop<T: FromLua>(&mut self) -> Option<T::Output> {
+    pub fn pop<T: FromLua>(&mut self) -> Option<T> {
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         if len == 0 {
             return None;
@@ -94,7 +94,7 @@ pub struct Ipairs<'t, 's, T> {
 }
 
 impl<'t, 's, T: FromLua> Iterator for Ipairs<'t, 's, T> {
-    type Item = (i32, T::Output);
+    type Item = (i32, T);
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.current <= self.len {
@@ -121,7 +121,7 @@ pub struct Pairs<'t, 's, K, V> {
 }
 
 impl<'t, 's, K: FromLua, V: FromLua> Iterator for Pairs<'t, 's, K, V> {
-    type Item = (K::Output, V::Output);
+    type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
         if self.finished {

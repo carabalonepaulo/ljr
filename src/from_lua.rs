@@ -1,10 +1,8 @@
 use crate::sys;
 use macros::generate_from_lua_tuple_impl;
 
-pub trait FromLua {
-    type Output;
-
-    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self::Output>;
+pub trait FromLua: Sized {
+    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self>;
 
     fn len() -> i32 {
         1
@@ -12,9 +10,7 @@ pub trait FromLua {
 }
 
 impl FromLua for i32 {
-    type Output = i32;
-
-    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isnumber(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_tonumber(ptr, idx) } as i32)
         } else {
@@ -24,9 +20,7 @@ impl FromLua for i32 {
 }
 
 impl FromLua for f32 {
-    type Output = f32;
-
-    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isnumber(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_tonumber(ptr, idx) } as f32)
         } else {
@@ -36,9 +30,7 @@ impl FromLua for f32 {
 }
 
 impl FromLua for f64 {
-    type Output = f64;
-
-    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isnumber(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_tonumber(ptr, idx) })
         } else {
@@ -48,9 +40,7 @@ impl FromLua for f64 {
 }
 
 impl FromLua for bool {
-    type Output = bool;
-
-    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isboolean(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_toboolean(ptr, idx) != 0 })
         } else {
@@ -60,9 +50,7 @@ impl FromLua for bool {
 }
 
 impl FromLua for String {
-    type Output = String;
-
-    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         unsafe {
             if sys::lua_type(ptr, idx) == sys::LUA_TSTRING as i32 {
                 let mut len = 0;
@@ -83,11 +71,8 @@ impl FromLua for String {
 impl<T> FromLua for Option<T>
 where
     T: FromLua,
-    T::Output: FromLua,
 {
-    type Output = Option<T::Output>;
-
-    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TNIL as i32 {
             Some(None)
         } else {
@@ -96,14 +81,12 @@ where
     }
 
     fn len() -> i32 {
-        <T as FromLua>::Output::len()
+        <T as FromLua>::len()
     }
 }
 
 impl FromLua for () {
-    type Output = ();
-
-    fn from_lua(_: *mut crate::sys::lua_State, _: i32) -> Option<Self::Output> {
+    fn from_lua(_: *mut crate::sys::lua_State, _: i32) -> Option<Self> {
         Some(())
     }
 

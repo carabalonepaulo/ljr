@@ -50,20 +50,17 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
 
             letters_a.push(ch.clone());
             cast_impl.push(gen_cast(letter));
-            where_ch.push(quote!(#ch: FromLua<Output = #ch>));
+            where_ch.push(quote!(#ch: FromLua));
         });
 
         let return_value = gen_return_value(alphabet[n - 1]);
         let letters_b = letters_a.clone();
-        let letters_c = letters_a.clone();
         impls.push(quote! {
             impl<#(#letters_a,)*> FromLua for (#(#letters_b,)*)
             where
                 #(#where_ch,)*
             {
-                type Output = (#(#letters_c,)*);
-
-                fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self::Output> {
+                fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
                     let top = unsafe { crate::sys::lua_gettop(ptr) };
                     let mut idx = {
                         if idx.is_negative() {

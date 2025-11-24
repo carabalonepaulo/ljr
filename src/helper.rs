@@ -28,7 +28,7 @@ pub fn from_lua<T: crate::from_lua::FromLua>(
     ptr: *mut sys::lua_State,
     idx: &mut i32,
     expected_type: &str,
-) -> T::Output {
+) -> T {
     match <T as crate::from_lua::FromLua>::from_lua(ptr, *idx) {
         Some(value) => {
             *idx += T::len();

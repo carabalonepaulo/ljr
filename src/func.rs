@@ -60,7 +60,7 @@ where
         }
     }
 
-    pub fn call(&self, args: I) -> Result<O::Output, Error> {
+    pub fn call(&self, args: I) -> Result<O, Error> {
         unsafe {
             let ptr = match self {
                 Func::Borrowed(ptr, idx) => {
@@ -115,9 +115,7 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    type Output = FnRef<I, O>;
-
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
             Some(Func::owned(InnerLua::from_ptr(ptr), idx))
         } else {
@@ -131,9 +129,7 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    type Output = StackFn<I, O>;
-
-    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
             Some(Func::borrowed(ptr, idx))
         } else {

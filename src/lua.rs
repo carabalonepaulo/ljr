@@ -184,14 +184,14 @@ impl Lua {
         self.do_file::<()>(code)
     }
 
-    pub fn do_file<T: ValueArg + ToLua>(&mut self, file_name: &str) -> Result<T::Output, Error> {
+    pub fn do_file<T: ValueArg + ToLua>(&mut self, file_name: &str) -> Result<T, Error> {
         self.eval::<T, _>(|ptr| {
             let file_name = CString::new(file_name)?;
             Ok(unsafe { sys::luaL_loadfile(ptr, file_name.as_ptr() as _) })
         })
     }
 
-    pub fn do_string<T: ValueArg + ToLua>(&mut self, code: &str) -> Result<T::Output, Error> {
+    pub fn do_string<T: ValueArg + ToLua>(&mut self, code: &str) -> Result<T, Error> {
         self.eval::<T, _>(|ptr| {
             let cstring = CString::new(code)?;
             Ok(unsafe { sys::luaL_loadstring(ptr, cstring.as_ptr() as _) })
@@ -204,7 +204,7 @@ impl Lua {
     >(
         &mut self,
         f: F,
-    ) -> Result<T::Output, Error> {
+    ) -> Result<T, Error> {
         let ptr = self.state();
         if f(ptr)? != 0 {
             let msg = <String as FromLua>::from_lua(ptr, -1).unwrap_or_default();
@@ -237,7 +237,7 @@ impl Lua {
         unsafe { sys::lua_settable(ptr, sys::LUA_GLOBALSINDEX) };
     }
 
-    pub fn get_global<T: ValueArg>(&self, name: &str) -> Option<T::Output> {
+    pub fn get_global<T: ValueArg>(&self, name: &str) -> Option<T> {
         let ptr = self.state();
         unsafe {
             sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
@@ -303,12 +303,7 @@ impl_get_global!((), i32, f32, f64, bool, String, StrRef, TableRef);
 
 impl<T> ValueArg for UdRef<T> where T: UserData {}
 
-impl<T> ValueArg for Option<T>
-where
-    T: FromLua,
-    T::Output: FromLua,
-{
-}
+impl<T> ValueArg for Option<T> where T: FromLua {}
 
 impl<I, O> ValueArg for FnRef<I, O>
 where

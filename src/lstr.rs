@@ -98,9 +98,7 @@ where
 }
 
 impl FromLua for StackStr {
-    type Output = StackStr;
-
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
             Some(Self::borrowed(ptr, idx))
         } else {
@@ -110,9 +108,7 @@ impl FromLua for StackStr {
 }
 
 impl FromLua for StrRef {
-    type Output = StrRef;
-
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
             Some(Self::owned(InnerLua::from_ptr(ptr), idx))
         } else {

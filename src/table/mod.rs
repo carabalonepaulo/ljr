@@ -210,9 +210,7 @@ impl<'t> Drop for GuardMut<'t> {
 }
 
 impl FromLua for StackTable {
-    type Output = StackTable;
-
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_istable(ptr, idx) } != 0 {
             Some(Table::borrowed(ptr, idx))
         } else {
@@ -222,9 +220,7 @@ impl FromLua for StackTable {
 }
 
 impl FromLua for TableRef {
-    type Output = TableRef;
-
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self::Output> {
+    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_istable(ptr, idx) } != 0 {
             Some(Table::owned(ptr, idx))
         } else {
