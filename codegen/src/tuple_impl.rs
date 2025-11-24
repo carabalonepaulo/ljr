@@ -56,7 +56,7 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
         let return_value = gen_return_value(alphabet[n - 1]);
         let letters_b = letters_a.clone();
         impls.push(quote! {
-            impl<#(#letters_a,)*> FromLua for (#(#letters_b,)*)
+            unsafe impl<#(#letters_a,)*> FromLua for (#(#letters_b,)*)
             where
                 #(#where_ch,)*
             {
@@ -126,7 +126,7 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
         }
         */
         parts.push(quote! {
-            impl<#(#letters_a,)*> ToLua for (#(#letters_b,)*)
+            unsafe impl<#(#letters_a,)*> ToLua for (#(#letters_b,)*)
             where
                 #(#where_ch,)*
             {

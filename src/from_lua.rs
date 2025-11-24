@@ -1,7 +1,7 @@
 use crate::sys;
 use macros::generate_from_lua_tuple_impl;
 
-pub trait FromLua: Sized {
+pub unsafe trait FromLua: Sized {
     fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self>;
 
     fn len() -> i32 {
@@ -9,7 +9,7 @@ pub trait FromLua: Sized {
     }
 }
 
-impl FromLua for i32 {
+unsafe impl FromLua for i32 {
     fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isnumber(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_tonumber(ptr, idx) } as i32)
@@ -19,7 +19,7 @@ impl FromLua for i32 {
     }
 }
 
-impl FromLua for f32 {
+unsafe impl FromLua for f32 {
     fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isnumber(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_tonumber(ptr, idx) } as f32)
@@ -29,7 +29,7 @@ impl FromLua for f32 {
     }
 }
 
-impl FromLua for f64 {
+unsafe impl FromLua for f64 {
     fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isnumber(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_tonumber(ptr, idx) })
@@ -39,7 +39,7 @@ impl FromLua for f64 {
     }
 }
 
-impl FromLua for bool {
+unsafe impl FromLua for bool {
     fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isboolean(ptr, idx) != 0 } {
             Some(unsafe { sys::lua_toboolean(ptr, idx) != 0 })
@@ -49,7 +49,7 @@ impl FromLua for bool {
     }
 }
 
-impl FromLua for String {
+unsafe impl FromLua for String {
     fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         unsafe {
             if sys::lua_type(ptr, idx) == sys::LUA_TSTRING as i32 {
@@ -68,7 +68,7 @@ impl FromLua for String {
     }
 }
 
-impl<T> FromLua for Option<T>
+unsafe impl<T> FromLua for Option<T>
 where
     T: FromLua,
 {
@@ -85,7 +85,7 @@ where
     }
 }
 
-impl FromLua for () {
+unsafe impl FromLua for () {
     fn from_lua(_: *mut crate::sys::lua_State, _: i32) -> Option<Self> {
         Some(())
     }

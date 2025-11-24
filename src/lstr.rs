@@ -96,7 +96,7 @@ where
     }
 }
 
-impl FromLua for StackStr {
+unsafe impl FromLua for StackStr {
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
             Some(Self::borrowed(ptr, idx))
@@ -106,7 +106,7 @@ impl FromLua for StackStr {
     }
 }
 
-impl FromLua for StrRef {
+unsafe impl FromLua for StrRef {
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
             Some(Self::owned(InnerLua::from_ptr(ptr), idx))
@@ -116,7 +116,7 @@ impl FromLua for StrRef {
     }
 }
 
-impl<M> ToLua for &LStr<M>
+unsafe impl<M> ToLua for &LStr<M>
 where
     M: Mode,
 {
@@ -132,7 +132,7 @@ where
     }
 }
 
-impl<M> ToLua for LStr<M>
+unsafe impl<M> ToLua for LStr<M>
 where
     M: Mode,
 {

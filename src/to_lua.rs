@@ -5,7 +5,7 @@ use macros::generate_to_lua_tuple_impl;
 
 use crate::{Nil, UserData};
 
-pub trait ToLua {
+pub unsafe trait ToLua {
     fn to_lua(self, ptr: *mut sys::lua_State);
 
     fn len() -> i32 {
@@ -13,49 +13,49 @@ pub trait ToLua {
     }
 }
 
-impl ToLua for i32 {
+unsafe impl ToLua for i32 {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushinteger(ptr, self as _) }
     }
 }
 
-impl ToLua for f32 {
+unsafe impl ToLua for f32 {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushnumber(ptr, self as _) }
     }
 }
 
-impl ToLua for f64 {
+unsafe impl ToLua for f64 {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushnumber(ptr, self) }
     }
 }
 
-impl ToLua for bool {
+unsafe impl ToLua for bool {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushboolean(ptr, if self { 1 } else { 0 }) }
     }
 }
 
-impl ToLua for &str {
+unsafe impl ToLua for &str {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushlstring_(ptr, self.as_bytes().as_ptr() as *const i8, self.len()) }
     }
 }
 
-impl ToLua for String {
+unsafe impl ToLua for String {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         self.as_str().to_lua(ptr)
     }
 }
 
-impl ToLua for Nil {
+unsafe impl ToLua for Nil {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushnil(ptr) }
     }
 }
 
-impl<T> ToLua for T
+unsafe impl<T> ToLua for T
 where
     T: UserData,
 {
@@ -99,7 +99,7 @@ where
     }
 }
 
-impl<T> ToLua for Option<T>
+unsafe impl<T> ToLua for Option<T>
 where
     T: ToLua,
 {
@@ -115,19 +115,19 @@ where
     }
 }
 
-impl ToLua for &[u8] {
+unsafe impl ToLua for &[u8] {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         unsafe { sys::lua_pushlstring(ptr, self.as_ptr() as *const i8, self.len()) };
     }
 }
 
-impl ToLua for Vec<u8> {
+unsafe impl ToLua for Vec<u8> {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         (self.as_ref() as &[u8]).to_lua(ptr);
     }
 }
 
-impl ToLua for () {
+unsafe impl ToLua for () {
     fn to_lua(self, _: *mut mlua_sys::lua_State) {}
 
     fn len() -> i32 {
@@ -135,7 +135,7 @@ impl ToLua for () {
     }
 }
 
-impl<T, E> ToLua for Result<T, E>
+unsafe impl<T, E> ToLua for Result<T, E>
 where
     T: ToLua,
     E: ToLua,

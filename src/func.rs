@@ -109,7 +109,7 @@ where
     }
 }
 
-impl<I, O> FromLua for FnRef<I, O>
+unsafe impl<I, O> FromLua for FnRef<I, O>
 where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
@@ -123,7 +123,7 @@ where
     }
 }
 
-impl<I, O> FromLua for StackFn<I, O>
+unsafe impl<I, O> FromLua for StackFn<I, O>
 where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
@@ -137,7 +137,7 @@ where
     }
 }
 
-impl<M, I, O> ToLua for &Func<M, I, O>
+unsafe impl<M, I, O> ToLua for &Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
@@ -155,7 +155,7 @@ where
     }
 }
 
-impl<M, I, O> ToLua for Func<M, I, O>
+unsafe impl<M, I, O> ToLua for Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,

@@ -119,7 +119,7 @@ where
     }
 }
 
-impl<T> FromLua for StackUd<T>
+unsafe impl<T> FromLua for StackUd<T>
 where
     T: UserData,
 {
@@ -149,7 +149,7 @@ where
     }
 }
 
-impl<T> FromLua for UdRef<T>
+unsafe impl<T> FromLua for UdRef<T>
 where
     T: UserData,
 {
@@ -181,7 +181,7 @@ where
     }
 }
 
-impl<M, T> ToLua for &Ud<M, T>
+unsafe impl<M, T> ToLua for &Ud<M, T>
 where
     M: Mode,
     T: UserData,
@@ -198,7 +198,7 @@ where
     }
 }
 
-impl<M, T> ToLua for Ud<M, T>
+unsafe impl<M, T> ToLua for Ud<M, T>
 where
     M: Mode,
     T: UserData,

@@ -208,7 +208,7 @@ impl<'t> Drop for GuardMut<'t> {
     }
 }
 
-impl FromLua for StackTable {
+unsafe impl FromLua for StackTable {
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_istable(ptr, idx) } != 0 {
             Some(Table::borrowed(ptr, idx))
@@ -218,7 +218,7 @@ impl FromLua for StackTable {
     }
 }
 
-impl FromLua for TableRef {
+unsafe impl FromLua for TableRef {
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_istable(ptr, idx) } != 0 {
             Some(Table::owned(ptr, idx))
@@ -228,7 +228,7 @@ impl FromLua for TableRef {
     }
 }
 
-impl<M> ToLua for &Table<M>
+unsafe impl<M> ToLua for &Table<M>
 where
     M: Mode,
 {
@@ -242,7 +242,7 @@ where
     }
 }
 
-impl<M> ToLua for Table<M>
+unsafe impl<M> ToLua for Table<M>
 where
     M: Mode,
 {
