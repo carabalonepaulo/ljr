@@ -1,7 +1,13 @@
+use crate::Nil;
 use crate::UserData;
 
+use crate::from_lua::FromLua;
+use crate::is_type::IsType;
+use crate::lstr::StackStr;
 use crate::sys;
 use crate::ud::StackUd;
+
+// TODO: FIX LEAK ON ERROR, DROP THINGS BEFORE lua_error
 
 macro_rules! lua_error {
     ($ptr:ident, $msg:expr) => {{
@@ -37,6 +43,45 @@ pub fn from_lua<T: crate::from_lua::FromLua>(
         None => {
             let msg = format!("invalid argument {}, expected {}", idx, expected_type);
             lua_error!(ptr, msg);
+        }
+    }
+}
+
+pub fn from_lua_opt_str(ptr: *mut sys::lua_State, idx: &mut i32) -> Option<StackStr> {
+    match StackStr::from_lua(ptr, *idx) {
+        Some(value) => {
+            *idx += StackStr::len();
+            Some(value)
+        }
+        None => {
+            if Nil::is_type(ptr, *idx) {
+                None
+            } else {
+                let msg = format!("invalid argument {}, expected &str or nil", idx);
+                lua_error!(ptr, msg);
+            }
+        }
+    }
+}
+
+pub fn from_lua_opt_stack_ud<T>(ptr: *mut sys::lua_State, idx: &mut i32) -> Option<StackUd<T>>
+where
+    T: UserData,
+{
+    match <StackUd<T> as crate::from_lua::FromLua>::from_lua(ptr, *idx) {
+        Some(value) => {
+            *idx += <StackUd<T> as crate::from_lua::FromLua>::len();
+            Some(value)
+        }
+        None => {
+            if Nil::is_type(ptr, *idx) {
+                None
+            } else {
+                let msg = format!("invalid argument {}, expected {} or nil", idx, unsafe {
+                    std::ffi::CStr::from_ptr(T::name()).to_str().unwrap()
+                });
+                lua_error!(ptr, msg);
+            }
         }
     }
 }

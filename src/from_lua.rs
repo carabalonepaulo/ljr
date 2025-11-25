@@ -1,4 +1,4 @@
-use crate::sys;
+use crate::{lstr::StackStr, lua::ValueArg, sys};
 use macros::generate_from_lua_tuple_impl;
 
 pub unsafe trait FromLua: Sized {
@@ -70,7 +70,7 @@ unsafe impl FromLua for String {
 
 unsafe impl<T> FromLua for Option<T>
 where
-    T: FromLua,
+    T: FromLua + ValueArg,
 {
     fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TNIL as i32 {
@@ -81,7 +81,7 @@ where
     }
 
     fn len() -> i32 {
-        <T as FromLua>::len()
+        T::len()
     }
 }
 
@@ -92,6 +92,13 @@ unsafe impl FromLua for () {
 
     fn len() -> i32 {
         0
+    }
+}
+
+unsafe impl FromLua for Vec<u8> {
+    fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
+        let temp = StackStr::from_lua(ptr, idx)?;
+        Some(temp.as_slice().to_vec())
     }
 }
 

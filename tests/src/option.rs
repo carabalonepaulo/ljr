@@ -83,7 +83,6 @@ fn test_to_lua_option_none_string() {
     assert_eq!(result, Ok(true));
 }
 
-// Define um UserData de exemplo que usa Option<T>
 struct OptionTest;
 
 #[user_data]
@@ -198,5 +197,126 @@ fn test_ud_option_set_flag_none() {
     .ok();
 
     let flag_value = lua.do_string::<bool>("return global_flag");
-    assert_eq!(flag_value, Ok(false)); // Espera `false` como fallback definido no Rust
+    assert_eq!(flag_value, Ok(false));
+}
+
+#[test]
+fn test_return_opt_owned_ud() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test {
+        value: i32,
+    }
+
+    #[user_data]
+    impl Test {
+        fn new(create: bool) -> Option<Test> {
+            if create {
+                Some(Test { value: 20 })
+            } else {
+                None
+            }
+        }
+
+        fn get(&self) -> i32 {
+            self.value
+        }
+    }
+
+    lua.register("test", Test { value: 10 });
+
+    let result = lua.do_string::<bool>(
+        r#"
+        local Test = require 'test'
+        local test = Test.new(true)
+        return test:get() == 20
+        "#,
+    );
+    assert!(matches!(result, Ok(true)));
+    assert_eq!(lua.top(), 0);
+
+    let result = lua.do_string::<bool>(
+        r#"
+        local Test = require 'test'
+        local test = Test.new(false)
+        return test == nil
+        "#,
+    );
+    assert!(matches!(result, Ok(true)));
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_opt_ud_ref_arg() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test {
+        value: i32,
+    }
+
+    #[user_data]
+    impl Test {
+        fn matches(&self, other: Option<&Test>) -> bool {
+            if let Some(other) = other {
+                self.value == other.value
+            } else {
+                false
+            }
+        }
+    }
+
+    struct TestFactory;
+
+    #[user_data]
+    impl TestFactory {
+        fn new(value: i32) -> Test {
+            Test { value }
+        }
+    }
+
+    lua.register("test", TestFactory);
+
+    let result = lua.do_string::<bool>(
+        r#"
+        local Test = require 'test'
+        local a = Test.new(123)
+        local b = Test.new(123)
+        return a:matches(b)
+        "#,
+    );
+    assert!(matches!(result, Ok(true)));
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_opt_str_arg() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test;
+
+    #[user_data]
+    impl Test {
+        fn say_hello(&self, other: Option<&str>) -> String {
+            if let Some(other) = other {
+                format!("hello {}", other)
+            } else {
+                String::new()
+            }
+        }
+    }
+
+    lua.register("test", Test);
+
+    let result = lua.do_string::<bool>(
+        r#"
+        local test = require 'test'
+        local msg = test:say_hello('soreto')
+        return msg == 'hello soreto'
+        "#,
+    );
+    assert!(matches!(result, Ok(true)));
+    assert_eq!(lua.top(), 0);
 }

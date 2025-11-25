@@ -106,7 +106,11 @@ where
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         match self {
             Some(value) => value.to_lua(ptr),
-            None => unsafe { sys::lua_pushnil(ptr) },
+            None => {
+                for _ in 0..<T as ToLua>::len() {
+                    unsafe { sys::lua_pushnil(ptr) };
+                }
+            }
         }
     }
 
@@ -144,17 +148,23 @@ where
         match self {
             Ok(value) => {
                 value.to_lua(ptr);
-                unsafe { sys::lua_pushnil(ptr) };
+
+                for _ in 0..E::len() {
+                    unsafe { sys::lua_pushnil(ptr) };
+                }
             }
             Err(e) => {
-                unsafe { sys::lua_pushnil(ptr) };
+                for _ in 0..T::len() {
+                    unsafe { sys::lua_pushnil(ptr) };
+                }
+
                 e.to_lua(ptr);
             }
         }
     }
 
     fn len() -> i32 {
-        2
+        T::len() + E::len()
     }
 }
 

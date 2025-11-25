@@ -1,4 +1,4 @@
-use macros::generate_get_global_tuple_impl;
+use macros::generate_value_arg_tuple_impl;
 
 use crate::{
     Borrowed,
@@ -185,14 +185,14 @@ impl Lua {
         self.do_file::<()>(code)
     }
 
-    pub fn do_file<T: ValueArg + ToLua>(&mut self, file_name: &str) -> Result<T, Error> {
+    pub fn do_file<T: ValueArg + FromLua + ToLua>(&mut self, file_name: &str) -> Result<T, Error> {
         self.eval::<T, _>(|ptr| {
             let file_name = CString::new(file_name)?;
             Ok(unsafe { sys::luaL_loadfile(ptr, file_name.as_ptr() as _) })
         })
     }
 
-    pub fn do_string<T: ValueArg + ToLua>(&mut self, code: &str) -> Result<T, Error> {
+    pub fn do_string<T: ValueArg + FromLua + ToLua>(&mut self, code: &str) -> Result<T, Error> {
         self.eval::<T, _>(|ptr| {
             let cstring = CString::new(code)?;
             Ok(unsafe { sys::luaL_loadstring(ptr, cstring.as_ptr() as _) })
@@ -200,7 +200,7 @@ impl Lua {
     }
 
     fn eval<
-        T: ValueArg + ToLua,
+        T: ValueArg + FromLua + ToLua,
         F: FnOnce(*mut sys::lua_State) -> Result<std::ffi::c_int, Error>,
     >(
         &mut self,
@@ -238,7 +238,7 @@ impl Lua {
         unsafe { sys::lua_settable(ptr, sys::LUA_GLOBALSINDEX) };
     }
 
-    pub fn get_global<T: ValueArg>(&self, name: &str) -> Option<T> {
+    pub fn get_global<T: FromLua + ValueArg>(&self, name: &str) -> Option<T> {
         let ptr = self.state();
         unsafe {
             sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
@@ -294,25 +294,25 @@ impl Display for Lua {
     }
 }
 
-pub trait ValueArg: FromLua {}
+pub unsafe trait ValueArg {}
 
-macro_rules! impl_get_global {
-    ($($ty:ty),*) => { $(impl ValueArg for $ty {} )* };
+macro_rules! impl_value_arg {
+    ($($ty:ty),*) => { $(unsafe impl ValueArg for $ty {} )* };
 }
 
-impl_get_global!((), i32, f32, f64, bool, String, StrRef, TableRef);
+impl_value_arg!((), i32, f32, f64, bool, String, StrRef, TableRef);
 
-impl<T> ValueArg for UdRef<T> where T: UserData {}
+unsafe impl<T> ValueArg for UdRef<T> where T: UserData {}
 
-impl<T> ValueArg for Option<T> where T: FromLua {}
+unsafe impl<T> ValueArg for Option<T> where T: FromLua + ValueArg {}
 
-impl<I, O> ValueArg for FnRef<I, O>
+unsafe impl<I, O> ValueArg for FnRef<I, O>
 where
     I: FromLua + ToLua,
-    O: FromLua + ToLua,
+    O: FromLua + ToLua + ValueArg,
 {
 }
 
-generate_get_global_tuple_impl!();
+generate_value_arg_tuple_impl!();
 
-pub fn ensure_get_global_impl<T: ValueArg>() {}
+pub fn ensure_value_arg<T: ValueArg>() {}

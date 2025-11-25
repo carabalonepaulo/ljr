@@ -16,8 +16,8 @@ pub fn generate_from_lua_tuple_impl(attr: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn generate_get_global_tuple_impl(attr: TokenStream) -> TokenStream {
-    codegen::tuple_impl::generate_get_global_tuple_impl(attr.into()).into()
+pub fn generate_value_arg_tuple_impl(attr: TokenStream) -> TokenStream {
+    codegen::tuple_impl::generate_value_arg_tuple_impl(attr.into()).into()
 }
 
 #[proc_macro_attribute]

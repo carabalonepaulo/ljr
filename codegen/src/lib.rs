@@ -86,7 +86,21 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                     Some(quote! { <StackUd<#inner_ty> as ljr::from_lua::FromLua>::len() })
                                 }
                             } else {
-                                Some(quote! { <#arg_ty as ljr::from_lua::FromLua>::len() })
+                                if type_info.name().starts_with("Option<") {
+                                    let opt_generic = &type_info.generics()[0];
+                                    let inner_ty = opt_generic.inner_ty();
+                                    if opt_generic.ref_kind().is_some() {
+                                        if opt_generic.name() == "str" {
+                                            Some(quote! { <StackStr as ljr::from_lua::FromLua>::len() })
+                                        } else {
+                                            Some(quote! { <StackUd<#inner_ty> as ljr::from_lua::FromLua>::len() })
+                                        }
+                                    } else {
+                                        Some(quote! { <#arg_ty as ljr::from_lua::FromLua>::len() })
+                                    }
+                                } else {
+                                    Some(quote! { <#arg_ty as ljr::from_lua::FromLua>::len() })
+                                }
                             }
                         },
                     }
@@ -119,11 +133,71 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                             panic!("the type {0} cannot be taken by value, only by reference, try using &{0} or &mut {0}", type_info.name())
                         }
 
-                        safe_args.push(quote_spanned! { arg_ty.span() => ljr::lua::ensure_get_global_impl::<#arg_ty>(); });
-                        call_args.push(quote_spanned! { arg_name.span() => #arg_name });
-                        borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                            let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str);
-                        })
+                        if type_info.name().starts_with("Option<") {
+                            let opt_generic = &type_info.generics()[0];
+                            let inner_ty = opt_generic.inner_ty();
+                            if opt_generic.ref_kind().is_some() {
+                                if opt_generic.name() == "str" {
+                                    let arg_opt = format_ident!("__{}_opt", arg_name);
+                                    let arg_tmp = format_ident!("__{}_tmp", arg_name);
+                                    let arg_final_value = format_ident!("__{}_final_value", arg_name);
+
+                                    call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                                    borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                        let #arg_opt = ljr::helper::from_lua_opt_str(ptr, &mut idx);
+                                        let #arg_tmp: StackStr;
+                                        let mut #arg_final_value: std::option::Option<&str> = None;
+
+                                        if let Some(value) = #arg_opt {
+                                            #arg_tmp = value;
+                                            #arg_final_value = Some(
+                                                #arg_tmp
+                                                    .as_str()
+                                                    .expect("lua string is not a valid rust string"),
+                                            );
+                                        }
+
+                                        let #arg_name = #arg_final_value;
+                                    });
+                                } else {
+                                    let arg_opt = format_ident!("__{}_opt", arg_name);
+                                    let arg_inner = format_ident!("__{}_inner", arg_name);
+                                    let arg_tmp_ref = format_ident!("__{}_inner_tmp_ref", arg_name);
+                                    let arg_ref = format_ident!("__{}_inner_ref", arg_name);
+                                    let arg_final_value = format_ident!("__{}_final_value", arg_name);
+                                    
+                                    let arg_gen_ty = opt_generic.inner_ty();
+
+                                    call_args.push(quote_spanned! { arg_name.span() => #arg_final_value });
+                                    borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                        let #arg_opt = ljr::helper::from_lua_opt_stack_ud::<#arg_gen_ty>(ptr, &mut idx);
+                                        let #arg_inner: ljr::ud::Ud<ljr::Borrowed, #arg_gen_ty>;
+                                        let #arg_tmp_ref: std::cell::Ref<'_, #arg_gen_ty>;
+                                        let #arg_ref: &#arg_gen_ty;
+                                        let mut #arg_final_value: std::option::Option<&#arg_gen_ty> = None;
+
+                                        if let Some(inner) = #arg_opt {
+                                            #arg_inner = inner;
+                                            #arg_tmp_ref = #arg_inner.as_ref();
+                                            #arg_ref = &*#arg_tmp_ref;
+                                            #arg_final_value = Some(#arg_ref);
+                                        }
+                                    })
+                                }
+                            } else {
+                                safe_args.push(quote_spanned! { arg_ty.span() => ljr::lua::ensure_value_arg::<#inner_ty>(); });
+                                call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                                borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                    let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str);
+                                })
+                            }
+                        } else {
+                            safe_args.push(quote_spanned! { arg_ty.span() => ljr::lua::ensure_value_arg::<#arg_ty>(); });
+                            call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                            borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str);
+                            })
+                        }
                     } else {
                         let ty_name = arg_name_str;
                         let ty_ident = type_info.inner_ty();

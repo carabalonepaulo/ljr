@@ -493,4 +493,13 @@ mod tests {
         assert_eq!(d.name(), "D");
         assert!(d.generics.is_empty());
     }
+
+    #[test]
+    fn test_opt_str() {
+        let ty = TypeInfo::new(&to_expr(quote!(Option<&str>))).unwrap();
+
+        assert_eq!(ty.name(), "Option<&str>");
+        assert_eq!(ty.generics.len(), 1);
+        assert_eq!(ty.generics[0].name(), "str");
+    }
 }

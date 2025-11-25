@@ -117,6 +117,7 @@ fn test_result_ok_userdata() {
     struct User {
         id: i32,
     }
+
     #[user_data]
     impl User {
         fn get_id(&self) -> i32 {
@@ -127,9 +128,9 @@ fn test_result_ok_userdata() {
     struct Repo;
     #[user_data]
     impl Repo {
-        fn find(id: i32) -> Result<User, String> {
+        fn find(id: i32, lua: &Lua) -> Result<UdRef<User>, String> {
             if id > 0 {
-                Ok(User { id })
+                Ok(lua.create_ref(User { id }))
             } else {
                 Err("invalid id".into())
             }

@@ -11,7 +11,6 @@ pub mod ud;
 pub mod from_lua;
 pub mod is_type;
 pub mod to_lua;
-
 pub use macros::*;
 pub use mlua_sys as sys;
 

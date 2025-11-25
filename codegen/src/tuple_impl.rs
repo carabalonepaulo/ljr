@@ -142,7 +142,7 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
     quote!(#(#parts)*)
 }
 
-pub fn generate_get_global_tuple_impl(_: TokenStream) -> TokenStream {
+pub fn generate_value_arg_tuple_impl(_: TokenStream) -> TokenStream {
     let max = 26;
     let mut impls = vec![];
     let alphabet: Vec<char> = (b'A'..b'Z').map(|c| c as char).collect();
@@ -164,7 +164,7 @@ pub fn generate_get_global_tuple_impl(_: TokenStream) -> TokenStream {
         let letters_b = letters_a.clone();
         where_ch.push(quote! { (#(#letters_b,)*): FromLua });
         impls.push(quote! {
-            impl<#(#letters_a,)*> ValueArg for (#(#letters_b,)*)
+            unsafe impl<#(#letters_a,)*> ValueArg for (#(#letters_b,)*)
             where
                 #(#where_ch,)*
             { }
