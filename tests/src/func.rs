@@ -276,3 +276,59 @@ fn test_callback_nested_calls() {
     assert_eq!(result, Ok(true));
     assert_eq!(lua.top(), 0);
 }
+
+#[test]
+fn test_integration_table_iter_func_call_with_stack_ud() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Item {
+        val: i32,
+    }
+
+    #[user_data]
+    impl Item {
+        fn get(&self) -> i32 {
+            self.val
+        }
+    }
+
+    struct Factory;
+
+    #[user_data]
+    impl Factory {
+        fn new(v: i32) -> Item {
+            Item { val: v }
+        }
+    }
+
+    lua.register("factory", Factory);
+
+    let table = lua
+        .do_string::<TableRef>(
+            r#"
+        local Factory = require 'factory'
+        return {
+            function() return Factory.new(10) end,
+            function() return Factory.new(20) end,
+            function() return Factory.new(30) end
+        }
+        "#,
+        )
+        .unwrap();
+
+    let mut total = 0;
+
+    table.with(|t| {
+        t.for_each(|_k: &i32, func: &StackFn<(), StackUd<Item>>| {
+            let val = func
+                .call_with((), |item_ud: &StackUd<Item>| item_ud.as_ref().get())
+                .unwrap_or(0);
+            total += val;
+            true
+        });
+    });
+
+    assert_eq!(total, 60);
+    assert_eq!(lua.top(), 0);
+}
