@@ -164,3 +164,115 @@ fn test_func_call_stack_leak() {
 
     assert_eq!(lua.top(), 0);
 }
+#[test]
+fn test_callback_with_stack_ud_return() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Item {
+        val: i32,
+    }
+    #[user_data]
+    impl Item {
+        fn get(&self) -> i32 {
+            self.val
+        }
+    }
+
+    struct ItemFactory;
+
+    #[user_data]
+    impl ItemFactory {
+        fn new(val: i32) -> Item {
+            Item { val }
+        }
+    }
+
+    struct Runner;
+    #[user_data]
+    impl Runner {
+        fn execute(callback: &StackFn<(), StackUd<Item>>) -> i32 {
+            callback
+                .call_with((), |item| item.as_ref().get())
+                .unwrap_or(-1)
+        }
+    }
+
+    lua.register("item", ItemFactory);
+    lua.register("runner", Runner);
+
+    let result = lua.do_string::<i32>(
+        r#"
+        local Item = require 'item'
+        local runner = require 'runner'
+        local my_item = Item.new(123)
+        return runner.execute(function() return my_item end)
+        "#,
+    );
+
+    assert!(matches!(result, Ok(123)));
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_callback_with_str_ref_return() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Runner;
+
+    #[user_data]
+    impl Runner {
+        fn len(cb: &StackFn<(), StackStr>) -> i32 {
+            cb.call_with((), |s| s.as_str().unwrap_or("").len() as i32)
+                .unwrap_or(-1)
+        }
+    }
+
+    lua.register("runner", Runner);
+
+    let result = lua.do_string::<i32>(
+        r#"
+        local runner = require 'runner'
+        local text = "hello world via callback"
+        return runner.len(function()
+            return text
+        end)
+        "#,
+    );
+
+    assert_eq!(result, Ok(24));
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_callback_nested_calls() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Processor;
+    #[user_data]
+    impl Processor {
+        fn process(data: &StackFn<i32, i32>) -> i32 {
+            data.call(10).unwrap_or(0) + 5
+        }
+
+        fn process_borrowed(data: &StackFn<i32, i32>) -> i32 {
+            data.call_with(20, |ret| *ret + 5).unwrap_or(0)
+        }
+    }
+
+    lua.register("proc", Processor);
+
+    let result = lua.do_string::<bool>(
+        r#"
+        local proc = require 'proc'
+        local res1 = proc.process(function(val) return val * 2 end)
+        local res2 = proc.process_borrowed(function(val) return val * 2 end)
+        return res1 == 25 and res2 == 45
+        "#,
+    );
+
+    assert_eq!(result, Ok(true));
+    assert_eq!(lua.top(), 0);
+}

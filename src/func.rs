@@ -13,7 +13,7 @@ pub type StackFn<I, O> = Func<Borrowed, I, O>;
 
 pub type FnRef<I, O> = Func<Owned, I, O>;
 
-pub struct OwnedFunc<M: Mode, I: FromLua + ToLua, O: FromLua + ToLua + ValueArg>(
+pub struct OwnedFunc<M: Mode, I: FromLua + ToLua, O: FromLua + ToLua>(
     Rc<InnerLua>,
     i32,
     PhantomData<(M, I, O)>,
@@ -23,7 +23,7 @@ impl<M, I, O> Drop for OwnedFunc<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua + ValueArg,
+    O: FromLua + ToLua,
 {
     fn drop(&mut self) {
         if let Some(ptr) = self.0.try_state() {
@@ -32,7 +32,7 @@ where
     }
 }
 
-pub enum Func<M: Mode, I: FromLua + ToLua, O: FromLua + ToLua + ValueArg> {
+pub enum Func<M: Mode, I: FromLua + ToLua, O: FromLua + ToLua> {
     Borrowed(*mut sys::lua_State, i32),
     Owned(Rc<OwnedFunc<M, I, O>>),
 }
@@ -41,7 +41,7 @@ impl<M, I, O> Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua + ValueArg,
+    O: FromLua + ToLua,
 {
     pub(crate) fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
         Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
@@ -64,7 +64,10 @@ where
         }
     }
 
-    pub fn call(&self, args: I) -> Result<O, Error> {
+    pub fn call(&self, args: I) -> Result<O, Error>
+    where
+        O: ValueArg,
+    {
         unsafe {
             let ptr = match self {
                 Func::Borrowed(ptr, idx) => {
@@ -102,13 +105,56 @@ where
             }
         }
     }
+
+    pub fn call_with<F, R>(&self, args: I, f: F) -> Result<R, Error>
+    where
+        F: FnOnce(&O) -> R,
+    {
+        unsafe {
+            let ptr = match self {
+                Func::Borrowed(ptr, idx) => {
+                    sys::lua_pushvalue(*ptr, *idx);
+                    *ptr
+                }
+                Func::Owned(inner) => {
+                    let ptr = inner.0.state();
+                    sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
+                    ptr
+                }
+            };
+            let old_top = sys::lua_gettop(ptr) - 1;
+
+            args.to_lua(ptr);
+            let o_len = <O as FromLua>::len();
+
+            if sys::lua_pcall(ptr, <I as ToLua>::len(), o_len, 0) != 0 {
+                if let Some(msg) = <String as FromLua>::from_lua(ptr, -1) {
+                    sys::lua_pop(ptr, 1);
+                    return Err(Error::LuaError(msg));
+                } else {
+                    sys::lua_pop(ptr, 1);
+                    return Err(Error::UnknownLuaError);
+                }
+            } else {
+                let value = O::from_lua(ptr, o_len * -1);
+                let result = if let Some(val) = value {
+                    Ok(f(&val))
+                } else {
+                    Err(Error::WrongReturnType)
+                };
+
+                sys::lua_settop(ptr, old_top);
+                result
+            }
+        }
+    }
 }
 
 impl<M, I, O> Clone for Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua + ValueArg,
+    O: FromLua + ToLua,
 {
     fn clone(&self) -> Self {
         self.to_owned()
@@ -118,7 +164,7 @@ where
 unsafe impl<I, O> FromLua for FnRef<I, O>
 where
     I: FromLua + ToLua,
-    O: FromLua + ToLua + ValueArg,
+    O: FromLua + ToLua,
 {
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
@@ -132,7 +178,7 @@ where
 unsafe impl<I, O> FromLua for StackFn<I, O>
 where
     I: FromLua + ToLua,
-    O: FromLua + ToLua + ValueArg,
+    O: FromLua + ToLua,
 {
     fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
@@ -147,7 +193,7 @@ unsafe impl<M, I, O> ToLua for &Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua + ValueArg,
+    O: FromLua + ToLua,
 {
     fn to_lua(self, ptr: *mut sys::lua_State) {
         unsafe {
@@ -165,7 +211,7 @@ unsafe impl<M, I, O> ToLua for Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua + ValueArg,
+    O: FromLua + ToLua,
 {
     fn to_lua(self, ptr: *mut sys::lua_State) {
         unsafe {

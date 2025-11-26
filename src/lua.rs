@@ -313,7 +313,7 @@ unsafe impl<T> ValueArg for Option<T> where T: FromLua + ValueArg {}
 unsafe impl<I, O> ValueArg for FnRef<I, O>
 where
     I: FromLua + ToLua,
-    O: FromLua + ToLua + ValueArg,
+    O: FromLua + ToLua,
 {
 }
 
