@@ -26,6 +26,10 @@ unsafe extern "C-unwind" fn sentinel_gc(ptr: *mut sys::lua_State) -> std::ffi::c
         let weak_ptr = sys::lua_touserdata(ptr, -1) as *mut std::rc::Weak<InnerLua>;
         sys::lua_pop(ptr, 1);
 
+        sys::lua_pushlightuserdata(ptr, ctx_key);
+        sys::lua_pushnil(ptr);
+        sys::lua_settable(ptr, sys::LUA_REGISTRYINDEX);
+
         if !weak_ptr.is_null() {
             let weak = Box::from_raw(weak_ptr);
             if let Some(inner) = weak.upgrade() {
@@ -213,7 +217,7 @@ impl Lua {
             return Err(Error::InvalidSyntax(msg));
         }
 
-        if unsafe { sys::lua_pcall(ptr, 0, <T as ToLua>::len(), 0) } != 0 {
+        if unsafe { sys::lua_pcall(ptr, 0, <T as FromLua>::len(), 0) } != 0 {
             if let Some(msg) = <String as FromLua>::from_lua(ptr, -1) {
                 unsafe { sys::lua_pop(ptr, 1) };
                 return Err(Error::LuaError(msg));
@@ -300,7 +304,7 @@ macro_rules! impl_value_arg {
     ($($ty:ty),*) => { $(unsafe impl ValueArg for $ty {} )* };
 }
 
-impl_value_arg!((), i32, f32, f64, bool, String, StrRef, TableRef);
+impl_value_arg!((), i32, f32, f64, bool, String, StrRef, TableRef, Vec<u8>);
 
 unsafe impl<T> ValueArg for UdRef<T> where T: UserData {}
 

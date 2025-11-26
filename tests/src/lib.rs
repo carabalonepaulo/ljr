@@ -1,3 +1,4 @@
+mod borrow_checker;
 mod func;
 mod global;
 mod option;
@@ -250,38 +251,6 @@ fn test_ud_mut_arg() {
     "#,
     );
     assert!(matches!(value, Ok(2190)));
-    assert_eq!(lua.top(), 0);
-}
-
-#[test]
-fn test_ud_borrow_checker() {
-    use gag::BufferRedirect;
-
-    let mut lua = Lua::new();
-    lua.open_libs();
-
-    struct Test;
-
-    #[user_data]
-    impl Test {
-        fn test(&self, _other: &mut Test) {}
-    }
-
-    lua.register("test", Test);
-
-    let redirect = BufferRedirect::stderr().unwrap();
-
-    let value = lua.do_string::<i32>(
-        r#"
-        local test = require 'test'
-        test:test(test)
-        "#,
-    );
-
-    let _ = redirect.into_inner();
-
-    let expected_msg = "RefCell already borrowed";
-    assert!(matches!(value, Err(Error::LuaError(ref msg)) if msg.contains(expected_msg)));
     assert_eq!(lua.top(), 0);
 }
 

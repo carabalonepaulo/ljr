@@ -22,60 +22,61 @@ where
 
 #[derive(Debug)]
 pub enum LStr<M: Mode> {
-    Borrowed(*mut sys::lua_State, i32),
-    Owned(Rc<OwnedLStr<M>>),
+    Borrowed(*mut sys::lua_State, i32, &'static [u8]),
+    Owned(Rc<OwnedLStr<M>>, &'static [u8]),
 }
 
 impl<M> LStr<M>
 where
     M: Mode,
 {
+    fn slice_from_stack(ptr: *mut sys::lua_State, idx: i32) -> &'static [u8] {
+        let mut len: usize = 0;
+        let str_ptr = unsafe { sys::lua_tolstring(ptr, idx, &mut len) };
+        let slice = unsafe { std::slice::from_raw_parts(str_ptr as *const u8, len) };
+        slice
+    }
+
     pub(crate) fn new(inner: Rc<InnerLua>, value: &str) -> Self {
         let ptr = inner.state();
         value.to_lua(ptr);
+        let slice = Self::slice_from_stack(ptr, -1);
         let id = unsafe { sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX) };
-        Self::Owned(Rc::new(OwnedLStr(inner, id, PhantomData)))
+        let inner = Rc::new(OwnedLStr(inner, id, PhantomData));
+        Self::Owned(inner, slice)
     }
 
     pub(crate) fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
-        Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
+        let idx = unsafe { sys::lua_absindex(ptr, idx) };
+        let slice = Self::slice_from_stack(ptr, idx);
+        Self::Borrowed(ptr, idx, slice)
     }
 
-    pub(crate) fn owned(inner: Rc<InnerLua>, idx: i32) -> Self {
+    pub(crate) fn owned(inner: Rc<InnerLua>, idx: i32, slice: &'static [u8]) -> Self {
         unsafe {
             let ptr = inner.state();
             sys::lua_pushvalue(ptr, idx);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Self::Owned(Rc::new(OwnedLStr(inner, id, PhantomData)))
+            let owned_str = Rc::new(OwnedLStr(inner, id, PhantomData));
+            Self::Owned(owned_str, slice)
         }
     }
 
     pub fn to_owned(&self) -> Self {
         match self {
-            LStr::Borrowed(ptr, idx) => Self::owned(InnerLua::from_ptr(*ptr), *idx),
-            LStr::Owned(inner) => Self::Owned(inner.clone()),
+            LStr::Borrowed(ptr, idx, slice) => Self::owned(InnerLua::from_ptr(*ptr), *idx, *slice),
+            LStr::Owned(inner, slice) => Self::Owned(inner.clone(), slice),
         }
     }
 
-    pub fn as_slice(&self) -> &[u8] {
-        let ptr = match self {
-            LStr::Borrowed(ptr, idx) => {
-                unsafe { sys::lua_pushvalue(*ptr, *idx) };
-                *ptr
+    pub fn as_slice<'a>(&'a self) -> &'a [u8] {
+        match self {
+            LStr::Borrowed(_, _, slice) => slice,
+            LStr::Owned(inner, slice) => {
+                let _ = inner.0.state();
+                slice
             }
-            LStr::Owned(inner) => {
-                let ptr = inner.0.state();
-                unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _) };
-                ptr
-            }
-        };
-
-        let mut len: usize = 0;
-        let str_ptr = unsafe { sys::lua_tolstring(ptr, -1, &mut len) };
-        let slice = unsafe { std::slice::from_raw_parts(str_ptr as *const u8, len) };
-        unsafe { sys::lua_pop(ptr, 1) };
-
-        slice
+        }
     }
 
     pub fn as_str(&self) -> Option<&str> {
@@ -109,7 +110,8 @@ unsafe impl FromLua for StackStr {
 unsafe impl FromLua for StrRef {
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
-            Some(Self::owned(InnerLua::from_ptr(ptr), idx))
+            let slice = Self::slice_from_stack(ptr, idx);
+            Some(Self::owned(InnerLua::from_ptr(ptr), idx, slice))
         } else {
             None
         }
@@ -122,10 +124,10 @@ where
 {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         match self {
-            LStr::Borrowed(_, idx) => unsafe {
+            LStr::Borrowed(_, idx, _) => unsafe {
                 sys::lua_pushvalue(ptr, *idx);
             },
-            LStr::Owned(inner) => unsafe {
+            LStr::Owned(inner, _) => unsafe {
                 sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
             },
         }
@@ -138,10 +140,10 @@ where
 {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         match self {
-            LStr::Borrowed(_, idx) => unsafe {
+            LStr::Borrowed(_, idx, _) => unsafe {
                 sys::lua_pushvalue(ptr, idx);
             },
-            LStr::Owned(inner) => unsafe {
+            LStr::Owned(inner, _) => unsafe {
                 sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
             },
         }
