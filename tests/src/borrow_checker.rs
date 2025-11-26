@@ -1,8 +1,13 @@
 #[cfg(test)]
 use ljr::prelude::*;
 
+#[cfg(test)]
+use crate::STDERR_LOCK;
+
 #[test]
 fn test_reentrancy() {
+    let _guard = STDERR_LOCK.lock().unwrap();
+
     let mut lua = Lua::new();
     lua.open_libs();
 
@@ -42,6 +47,7 @@ fn test_reentrancy() {
         let _ = redirect.into_inner();
         let expected_msg = "RefCell already";
         assert!(matches!(result, Err(Error::LuaError(ref msg)) if msg.contains(expected_msg)));
+        assert_eq!(lua.top(), 0);
     }
 
     {
@@ -52,6 +58,7 @@ fn test_reentrancy() {
             "#,
         );
         assert!(matches!(result, Ok(true)));
+        assert_eq!(lua.top(), 0);
     }
 
     {
@@ -62,11 +69,14 @@ fn test_reentrancy() {
             "#,
         );
         assert!(matches!(result, Ok(true)));
+        assert_eq!(lua.top(), 0);
     }
 }
 
 #[test]
 fn test_callback_reentrancy() {
+    let _guard = STDERR_LOCK.lock().unwrap();
+
     let mut lua = Lua::new();
     lua.open_libs();
 
@@ -119,6 +129,7 @@ fn test_callback_reentrancy() {
         let _ = redirect.into_inner();
         let expected_msg = "RefCell already";
         assert!(matches!(result, Err(Error::LuaError(ref msg)) if msg.contains(expected_msg)));
+        assert_eq!(lua.top(), 0);
     }
 
     {
@@ -134,8 +145,11 @@ fn test_callback_reentrancy() {
             "#,
         );
         assert!(matches!(result, Ok(true)));
+        assert_eq!(lua.top(), 0);
 
         let result = lua.do_string::<String>("return require('sys'):get_state()");
+        // panic!("{:?}", result);
         assert!(matches!(result, Ok(ref s) if s == "finished"));
+        assert_eq!(lua.top(), 0);
     }
 }
