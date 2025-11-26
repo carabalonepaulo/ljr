@@ -106,7 +106,7 @@ where
         }
     }
 
-    pub fn call_with<F, R>(&self, args: I, f: F) -> Result<R, Error>
+    pub fn call_then<F, R>(&self, args: I, f: F) -> Result<R, Error>
     where
         F: FnOnce(&O) -> R,
     {

@@ -1,5 +1,7 @@
 #[cfg(test)]
 use ljr::prelude::*;
+#[cfg(test)]
+use ljr::table::view::TableView;
 
 #[test]
 fn test_stack_table_mutation() {
@@ -245,7 +247,7 @@ fn test_pop_with_preserves_stack_balance_on_error_simulation() {
     let mut table = lua.create_table();
     table.extend_from_slice(&[1, 2, 3, 4, 5]);
 
-    table.with_mut(|t| while let Some(_) = t.pop_with(|_: &i32| {}) {});
+    table.with_mut(|t| while let Some(_) = t.pop_then(|_: &i32| {}) {});
 
     assert_eq!(table.len(), 0);
     assert_eq!(lua.top(), 0);
@@ -259,7 +261,7 @@ fn test_pop_with_empty_table() {
     let mut table = lua.create_table();
 
     let result = table.with_mut(|t| {
-        t.pop_with(|_: &i32| {
+        t.pop_then(|_: &i32| {
             panic!("Closure should not be called on empty table pop");
         })
     });
@@ -291,7 +293,7 @@ fn test_table_pop_with_userdata_side_effects() {
     });
     assert_eq!(table.len(), 1);
 
-    let extracted_value = table.with_mut(|t| t.pop_with(|u: &StackUd<Counter>| u.as_ref().get()));
+    let extracted_value = table.with_mut(|t| t.pop_then(|u: &StackUd<Counter>| u.as_ref().get()));
     assert_eq!(extracted_value, Some(42));
     assert_eq!(table.len(), 0);
     assert_eq!(lua.top(), 0);
@@ -308,7 +310,7 @@ fn test_table_get_with_str_ref_optimization() {
     });
 
     table.with(|t| {
-        let len = t.get_with("msg", |s: &StackStr| s.as_str().unwrap_or("").len());
+        let len = t.view("msg", |s: &StackStr| s.as_str().unwrap_or("").len());
         assert_eq!(len, Some(11));
     });
 
@@ -325,7 +327,7 @@ fn test_table_pop_with_primitive() {
     assert_eq!(table.len(), 3);
 
     table.with_mut(|t| {
-        let was_thirty = t.pop_with(|val: &i32| *val == 30);
+        let was_thirty = t.pop_then(|val: &i32| *val == 30);
         assert_eq!(was_thirty, Some(true));
     });
     assert_eq!(table.len(), 2);
@@ -353,7 +355,7 @@ fn test_table_get_with_primitive() {
     });
 
     table.with(|t| {
-        let double_score = t.get_with("score", |val: &i32| *val * 2);
+        let double_score = t.view("score", |val: &i32| *val * 2);
         assert_eq!(double_score, Some(200));
 
         let exists: Option<i32> = t.get("score");
@@ -535,5 +537,119 @@ fn test_pairs_iterator_break_leak() {
         assert_eq!(lua.top(), top);
     });
 
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_builder_simple() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    let builder = TableBuilder::new(|t| {
+        t.push(10);
+        t.push(20);
+        t.set("active", true);
+    })
+    .with_capacity(2, 1);
+
+    lua.set_global("config", builder);
+
+    let result = lua.do_string::<bool>(
+        r#"
+        return config[1] == 10 
+           and config[2] == 20 
+           and config.active == true
+        "#,
+    );
+
+    assert_eq!(result, Ok(true));
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_builder_nested() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    let complex_structure = TableBuilder::new(|root| {
+        root.set("id", "root_node");
+
+        root.set(
+            "metadata",
+            TableBuilder::new(|meta| {
+                meta.set("version", 1.0);
+                meta.set("author", "Rust");
+            })
+            .with_capacity(0, 2),
+        );
+
+        root.set(
+            "items",
+            TableBuilder::new(|arr| {
+                arr.push(TableBuilder::new(|item| {
+                    item.set("val", 100);
+                }));
+                arr.push(TableBuilder::new(|item| {
+                    item.set("val", 200);
+                }));
+            })
+            .with_capacity(2, 0),
+        );
+    });
+
+    lua.set_global("data", complex_structure);
+
+    let result = lua.do_string::<bool>(
+        r#"
+        if data.id ~= "root_node" then return false end
+        if data.metadata.version ~= 1.0 then return false end
+        if data.items[1].val ~= 100 then return false end
+        if data.items[2].val ~= 200 then return false end
+        
+        return true
+        "#,
+    );
+
+    assert_eq!(result, Ok(true));
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_builder_return_from_rust() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Api;
+
+    #[user_data]
+    impl Api {
+        fn make_response(&self, status: i32) -> TableBuilder<impl FnOnce(&mut TableView) + use<>> {
+            TableBuilder::new(move |t| {
+                t.set("status", status);
+                t.set("ok", status == 200);
+                t.set(
+                    "payload",
+                    TableBuilder::new(|p| {
+                        p.push("data");
+                    }),
+                );
+            })
+        }
+    }
+
+    lua.register("api", Api);
+
+    let result = lua.do_string::<bool>(
+        r#"
+        local api = require 'api'
+        local res = api.make_response(200)
+        
+        return res.status == 200 
+           and res.ok == true 
+           and res.payload[1] == "data"
+        "#,
+    );
+
+    assert_eq!(result, Ok(true));
     assert_eq!(lua.top(), 0);
 }

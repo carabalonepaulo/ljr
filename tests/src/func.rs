@@ -193,7 +193,7 @@ fn test_callback_with_stack_ud_return() {
     impl Runner {
         fn execute(callback: &StackFn<(), StackUd<Item>>) -> i32 {
             callback
-                .call_with((), |item| item.as_ref().get())
+                .call_then((), |item| item.as_ref().get())
                 .unwrap_or(-1)
         }
     }
@@ -224,7 +224,7 @@ fn test_callback_with_str_ref_return() {
     #[user_data]
     impl Runner {
         fn len(cb: &StackFn<(), StackStr>) -> i32 {
-            cb.call_with((), |s| s.as_str().unwrap_or("").len() as i32)
+            cb.call_then((), |s| s.as_str().unwrap_or("").len() as i32)
                 .unwrap_or(-1)
         }
     }
@@ -258,7 +258,7 @@ fn test_callback_nested_calls() {
         }
 
         fn process_borrowed(data: &StackFn<i32, i32>) -> i32 {
-            data.call_with(20, |ret| *ret + 5).unwrap_or(0)
+            data.call_then(20, |ret| *ret + 5).unwrap_or(0)
         }
     }
 
@@ -322,7 +322,7 @@ fn test_integration_table_iter_func_call_with_stack_ud() {
     table.with(|t| {
         t.for_each(|_k: &i32, func: &StackFn<(), StackUd<Item>>| {
             let val = func
-                .call_with((), |item_ud: &StackUd<Item>| item_ud.as_ref().get())
+                .call_then((), |item_ud: &StackUd<Item>| item_ud.as_ref().get())
                 .unwrap_or(0);
             total += val;
             true

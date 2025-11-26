@@ -24,7 +24,7 @@ impl<'t> TableView<'t> {
         val
     }
 
-    pub fn get_with<'a, T: FromLua, F: FnOnce(&T) -> R, R>(
+    pub fn view<'a, T: FromLua, F: FnOnce(&T) -> R, R>(
         &self,
         key: impl TableKey<'a>,
         f: F,
@@ -65,7 +65,7 @@ impl<'t> TableView<'t> {
         val
     }
 
-    pub fn pop_with<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Option<R> {
+    pub fn pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Option<R> {
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         if len == 0 {
             return None;

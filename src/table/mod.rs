@@ -1,3 +1,4 @@
+pub mod builder;
 pub mod constraints;
 pub mod view;
 

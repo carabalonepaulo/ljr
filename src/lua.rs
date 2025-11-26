@@ -254,6 +254,25 @@ impl Lua {
         out
     }
 
+    pub fn with_global<T: FromLua, F: FnOnce(&T) -> R, R>(&self, name: &str, f: F) -> Option<R> {
+        let ptr = self.state();
+        let top = unsafe { sys::lua_gettop(ptr) };
+
+        unsafe {
+            sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
+            sys::lua_gettable(ptr, sys::LUA_GLOBALSINDEX);
+        }
+
+        let result = if let Some(value) = T::from_lua(ptr, -1) {
+            Some(f(&value))
+        } else {
+            None
+        };
+
+        unsafe { sys::lua_settop(ptr, top) };
+        result
+    }
+
     pub fn top(&self) -> i32 {
         unsafe { sys::lua_gettop(self.state()) }
     }
