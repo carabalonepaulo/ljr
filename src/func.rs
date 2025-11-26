@@ -1,14 +1,19 @@
 use std::{marker::PhantomData, rc::Rc};
 
 use crate::{
-    Borrowed, Mode, Owned, error::Error, from_lua::FromLua, lua::InnerLua, sys, to_lua::ToLua,
+    Borrowed, Mode, Owned,
+    error::Error,
+    from_lua::FromLua,
+    lua::{InnerLua, ValueArg},
+    sys,
+    to_lua::ToLua,
 };
 
 pub type StackFn<I, O> = Func<Borrowed, I, O>;
 
 pub type FnRef<I, O> = Func<Owned, I, O>;
 
-pub struct OwnedFunc<M: Mode, I: FromLua + ToLua, O: FromLua + ToLua>(
+pub struct OwnedFunc<M: Mode, I: FromLua + ToLua, O: FromLua + ToLua + ValueArg>(
     Rc<InnerLua>,
     i32,
     PhantomData<(M, I, O)>,
@@ -18,7 +23,7 @@ impl<M, I, O> Drop for OwnedFunc<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua,
+    O: FromLua + ToLua + ValueArg,
 {
     fn drop(&mut self) {
         if let Some(ptr) = self.0.try_state() {
@@ -27,7 +32,7 @@ where
     }
 }
 
-pub enum Func<M: Mode, I: FromLua + ToLua, O: FromLua + ToLua> {
+pub enum Func<M: Mode, I: FromLua + ToLua, O: FromLua + ToLua + ValueArg> {
     Borrowed(*mut sys::lua_State, i32),
     Owned(Rc<OwnedFunc<M, I, O>>),
 }
@@ -36,7 +41,7 @@ impl<M, I, O> Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua,
+    O: FromLua + ToLua + ValueArg,
 {
     pub(crate) fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
         Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
@@ -86,13 +91,14 @@ where
                     return Err(Error::UnknownLuaError);
                 }
             } else {
-                if let Some(value) = O::from_lua(ptr, o_len * -1) {
+                let result = if let Some(value) = O::from_lua(ptr, o_len * -1) {
                     Ok(value)
                 } else {
-                    let diff = sys::lua_gettop(ptr) - old_top;
-                    sys::lua_pop(ptr, diff);
                     Err(Error::WrongReturnType)
-                }
+                };
+
+                sys::lua_settop(ptr, old_top);
+                result
             }
         }
     }
@@ -102,7 +108,7 @@ impl<M, I, O> Clone for Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua,
+    O: FromLua + ToLua + ValueArg,
 {
     fn clone(&self) -> Self {
         self.to_owned()
@@ -112,7 +118,7 @@ where
 unsafe impl<I, O> FromLua for FnRef<I, O>
 where
     I: FromLua + ToLua,
-    O: FromLua + ToLua,
+    O: FromLua + ToLua + ValueArg,
 {
     fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
@@ -126,7 +132,7 @@ where
 unsafe impl<I, O> FromLua for StackFn<I, O>
 where
     I: FromLua + ToLua,
-    O: FromLua + ToLua,
+    O: FromLua + ToLua + ValueArg,
 {
     fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self> {
         if unsafe { sys::lua_isfunction(ptr, idx) } != 0 {
@@ -141,7 +147,7 @@ unsafe impl<M, I, O> ToLua for &Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua,
+    O: FromLua + ToLua + ValueArg,
 {
     fn to_lua(self, ptr: *mut sys::lua_State) {
         unsafe {
@@ -159,7 +165,7 @@ unsafe impl<M, I, O> ToLua for Func<M, I, O>
 where
     M: Mode,
     I: FromLua + ToLua,
-    O: FromLua + ToLua,
+    O: FromLua + ToLua + ValueArg,
 {
     fn to_lua(self, ptr: *mut sys::lua_State) {
         unsafe {

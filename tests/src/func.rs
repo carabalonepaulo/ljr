@@ -145,3 +145,22 @@ fn test_return_fn_ref() {
     assert!(matches!(result, Ok(123)));
     assert_eq!(0, lua.top());
 }
+
+#[test]
+fn test_func_call_stack_leak() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    let func = lua
+        .do_string::<FnRef<(), i32>>("return function() return 42 end")
+        .unwrap();
+
+    assert_eq!(lua.top(), 0);
+
+    for _ in 0..100 {
+        let result = func.call(());
+        assert_eq!(result, Ok(42));
+    }
+
+    assert_eq!(lua.top(), 0);
+}
