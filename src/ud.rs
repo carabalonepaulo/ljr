@@ -142,7 +142,7 @@ where
                 return None;
             }
 
-            sys::lua_pop(ptr, 2);
+            sys::lua_pop(ptr, 3);
         }
 
         Some(Ud::<Borrowed, T>::borrowed(ptr, idx))
