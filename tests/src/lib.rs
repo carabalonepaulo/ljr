@@ -10,6 +10,9 @@ mod table;
 #[cfg(test)]
 use ljr::prelude::*;
 
+#[cfg(test)]
+static STDERR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn test_do_string_return_num() {
     let mut lua = Lua::new();

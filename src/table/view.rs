@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{from_lua::FromLua, sys, table::constraints::TableKey, to_lua::ToLua};
+use crate::{from_lua::FromLua, lua::ValueArg, sys, table::constraints::TableKey, to_lua::ToLua};
 
 #[derive(Debug)]
 pub struct TableView<'t>(*mut sys::lua_State, i32, PhantomData<&'t ()>);
@@ -16,12 +16,29 @@ impl<'t> TableView<'t> {
         unsafe { sys::lua_settable(self.0, self.1) };
     }
 
-    pub fn get<'a, T: FromLua>(&self, key: impl TableKey<'a>) -> Option<T> {
+    pub fn get<'a, T: FromLua + ValueArg>(&self, key: impl TableKey<'a>) -> Option<T> {
         key.to_lua(self.0);
         unsafe { sys::lua_gettable(self.0, self.1) };
         let val = <T as FromLua>::from_lua(self.0, -1);
         unsafe { sys::lua_pop(self.0, 1) };
         val
+    }
+
+    pub fn get_with<'a, T: FromLua, F: FnOnce(&T) -> R, R>(
+        &self,
+        key: impl TableKey<'a>,
+        f: F,
+    ) -> Option<R> {
+        key.to_lua(self.0);
+        unsafe { sys::lua_gettable(self.0, self.1) };
+        let value = <T as FromLua>::from_lua(self.0, -1);
+        let result = if let Some(value) = value {
+            Some(f(&value))
+        } else {
+            None
+        };
+        unsafe { sys::lua_pop(self.0, 1) };
+        result
     }
 
     pub fn push(&mut self, value: impl ToLua) {
@@ -30,7 +47,7 @@ impl<'t> TableView<'t> {
         unsafe { sys::lua_rawseti(self.0, self.1, (len + 1) as _) };
     }
 
-    pub fn pop<T: FromLua>(&mut self) -> Option<T> {
+    pub fn pop<T: FromLua + ValueArg>(&mut self) -> Option<T> {
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         if len == 0 {
             return None;
@@ -38,6 +55,7 @@ impl<'t> TableView<'t> {
 
         unsafe { sys::lua_rawgeti(self.0, self.1, len as _) };
         let val = <T as FromLua>::from_lua(self.0, -1);
+        unsafe { sys::lua_pop(self.0, 1) };
 
         unsafe {
             sys::lua_pushnil(self.0);
@@ -45,6 +63,30 @@ impl<'t> TableView<'t> {
         }
 
         val
+    }
+
+    pub fn pop_with<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Option<R> {
+        let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
+        if len == 0 {
+            return None;
+        }
+
+        unsafe { sys::lua_rawgeti(self.0, self.1, len as _) };
+        let value = <T as FromLua>::from_lua(self.0, -1);
+        let result = if let Some(value) = value {
+            let result = f(&value);
+            unsafe {
+                sys::lua_pushnil(self.0);
+                sys::lua_rawseti(self.0, self.1, len as _);
+            }
+
+            Some(result)
+        } else {
+            None
+        };
+
+        unsafe { sys::lua_pop(self.0, 1) };
+        result
     }
 
     pub fn clear(&mut self) {
@@ -66,7 +108,38 @@ impl<'t> TableView<'t> {
         unsafe { sys::lua_objlen(self.0, self.1) }
     }
 
-    pub fn ipairs<'s, T: FromLua>(&'s self) -> Ipairs<'t, 's, T> {
+    pub fn for_each<K, V, F>(&self, mut f: F)
+    where
+        K: FromLua,
+        V: FromLua,
+        F: FnMut(&K, &V) -> bool,
+    {
+        let ptr = self.0;
+        let t_idx = self.1;
+
+        unsafe {
+            sys::lua_pushnil(ptr);
+
+            while sys::lua_next(ptr, t_idx) != 0 {
+                let key = <K as FromLua>::from_lua(ptr, -2);
+                let val = <V as FromLua>::from_lua(ptr, -1);
+
+                let should_continue = match (key, val) {
+                    (Some(k), Some(v)) => f(&k, &v),
+                    _ => true,
+                };
+
+                sys::lua_pop(ptr, 1);
+
+                if !should_continue {
+                    sys::lua_pop(ptr, 1);
+                    return;
+                }
+            }
+        }
+    }
+
+    pub fn ipairs<'s, T: FromLua + ValueArg>(&'s self) -> Ipairs<'t, 's, T> {
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         Ipairs {
             tref: self,
@@ -76,7 +149,9 @@ impl<'t> TableView<'t> {
         }
     }
 
-    pub fn pairs<'s, K: FromLua, V: FromLua>(&'s self) -> Pairs<'t, 's, K, V> {
+    pub fn pairs<'s, K: FromLua + ValueArg, V: FromLua + ValueArg>(
+        &'s self,
+    ) -> Pairs<'t, 's, K, V> {
         Pairs {
             tref: self,
             started: false,
@@ -86,14 +161,17 @@ impl<'t> TableView<'t> {
     }
 }
 
-pub struct Ipairs<'t, 's, T> {
+pub struct Ipairs<'t, 's, T: FromLua + ValueArg> {
     tref: &'s TableView<'t>,
     current: i32,
     len: i32,
     marker: PhantomData<T>,
 }
 
-impl<'t, 's, T: FromLua> Iterator for Ipairs<'t, 's, T> {
+impl<'t, 's, T> Iterator for Ipairs<'t, 's, T>
+where
+    T: FromLua + ValueArg,
+{
     type Item = (i32, T);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -120,7 +198,11 @@ pub struct Pairs<'t, 's, K, V> {
     marker: PhantomData<(K, V)>,
 }
 
-impl<'t, 's, K: FromLua, V: FromLua> Iterator for Pairs<'t, 's, K, V> {
+impl<'t, 's, K, V> Iterator for Pairs<'t, 's, K, V>
+where
+    K: FromLua + ValueArg,
+    V: FromLua + ValueArg,
+{
     type Item = (K, V);
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -151,6 +233,14 @@ impl<'t, 's, K: FromLua, V: FromLua> Iterator for Pairs<'t, 's, K, V> {
                     return Some((k, v));
                 }
             }
+        }
+    }
+}
+
+impl<'t, 's, K, V> Drop for Pairs<'t, 's, K, V> {
+    fn drop(&mut self) {
+        if self.started && !self.finished {
+            unsafe { sys::lua_pop(self.tref.0, 1) };
         }
     }
 }

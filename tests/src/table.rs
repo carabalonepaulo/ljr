@@ -236,3 +236,304 @@ fn test_stack_table_type_check_error() {
 
     assert_eq!(lua.top(), 0);
 }
+
+#[test]
+fn test_pop_with_preserves_stack_balance_on_error_simulation() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.extend_from_slice(&[1, 2, 3, 4, 5]);
+
+    table.with_mut(|t| while let Some(_) = t.pop_with(|_: &i32| {}) {});
+
+    assert_eq!(table.len(), 0);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_pop_with_empty_table() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+
+    let result = table.with_mut(|t| {
+        t.pop_with(|_: &i32| {
+            panic!("Closure should not be called on empty table pop");
+        })
+    });
+
+    assert_eq!(result, None);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_pop_with_userdata_side_effects() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    struct Counter {
+        count: i32,
+    }
+
+    #[user_data]
+    impl Counter {
+        fn get(&self) -> i32 {
+            self.count
+        }
+    }
+
+    let ud = lua.create_ref(Counter { count: 42 });
+    let mut table = lua.create_table();
+    table.with_mut(|t| {
+        t.push(ud);
+    });
+    assert_eq!(table.len(), 1);
+
+    let extracted_value = table.with_mut(|t| t.pop_with(|u: &StackUd<Counter>| u.as_ref().get()));
+    assert_eq!(extracted_value, Some(42));
+    assert_eq!(table.len(), 0);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_get_with_str_ref_optimization() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.with_mut(|t| {
+        t.set("msg", "hello world");
+    });
+
+    table.with(|t| {
+        let len = t.get_with("msg", |s: &StackStr| s.as_str().unwrap_or("").len());
+        assert_eq!(len, Some(11));
+    });
+
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_pop_with_primitive() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.extend_from_slice(&[10, 20, 30]);
+    assert_eq!(table.len(), 3);
+
+    table.with_mut(|t| {
+        let was_thirty = t.pop_with(|val: &i32| *val == 30);
+        assert_eq!(was_thirty, Some(true));
+    });
+    assert_eq!(table.len(), 2);
+
+    table.with(|t| {
+        let last = t.get::<i32>(3);
+        assert_eq!(last, None);
+
+        let new_last = t.get::<i32>(2);
+        assert_eq!(new_last, Some(20));
+    });
+
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_get_with_primitive() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.with_mut(|t| {
+        t.set("score", 100);
+        t.set("lives", 3);
+    });
+
+    table.with(|t| {
+        let double_score = t.get_with("score", |val: &i32| *val * 2);
+        assert_eq!(double_score, Some(200));
+
+        let exists: Option<i32> = t.get("score");
+        assert_eq!(exists, Some(100));
+    });
+
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_for_each_sum_primitive() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.extend_from_slice(&[10, 20, 30]);
+
+    let mut sum = 0;
+
+    table.with(|t| {
+        t.for_each(|_k: &i32, v: &i32| {
+            sum += *v;
+            true
+        });
+    });
+
+    assert_eq!(sum, 60);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_for_each_filter_types() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.with_mut(|t| {
+        t.set("a", 10);
+        t.set("b", "ignorar");
+        t.set(100, 20);
+        t.set("c", 30);
+    });
+
+    let mut count = 0;
+    let mut sum = 0;
+
+    table.with(|t| {
+        t.for_each(|k: &String, v: &i32| {
+            count += 1;
+            sum += *v;
+
+            assert!(k == "a" || k == "c");
+            true
+        });
+    });
+
+    assert_eq!(count, 2);
+    assert_eq!(sum, 40);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_for_each_break_behavior() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.extend_from_slice(&[1, 2, 3, 4, 5]);
+
+    let mut visited = 0;
+
+    table.with(|t| {
+        t.for_each(|_k: &i32, v: &i32| {
+            visited += 1;
+            if *v == 3 {
+                return false;
+            }
+            true
+        });
+    });
+
+    assert_eq!(visited, 3);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_for_each_nested_str_ref() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.with_mut(|t| {
+        t.set("nome", "lua");
+        t.set("tipo", "linguagem");
+    });
+
+    let mut total_len = 0;
+
+    table.with(|t| {
+        t.for_each(|k: &StackStr, v: &StackStr| {
+            total_len += k.as_str().unwrap().len();
+            total_len += v.as_str().unwrap().len();
+            true
+        });
+    });
+
+    assert_eq!(total_len, 20);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_for_each_with_userdata_borrow() {
+    struct Item {
+        val: i32,
+    }
+    #[user_data]
+    impl Item {
+        fn get(&self) -> i32 {
+            self.val
+        }
+    }
+
+    struct ItemFactory;
+
+    #[user_data]
+    impl ItemFactory {
+        fn new(val: i32) -> Item {
+            Item { val }
+        }
+    }
+
+    let mut lua = Lua::new();
+    lua.open_libs();
+    lua.register("item", ItemFactory);
+
+    let table = lua
+        .do_string::<TableRef>(
+            r#"
+            local Item = require 'item'
+            local a = Item.new(100)
+            local b = Item.new(200)
+            return { a, b }
+            "#,
+        )
+        .unwrap();
+
+    let mut sum = 0;
+    table.with(|t| {
+        t.for_each(|_: &i32, v: &StackUd<Item>| {
+            sum += v.as_ref().get();
+            true
+        });
+    });
+
+    assert_eq!(sum, 300);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_pairs_iterator_break_leak() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = lua.create_table();
+    table.extend_from_slice(&[10, 20, 30, 40, 50]);
+
+    assert_eq!(lua.top(), 0);
+
+    table.with(|t| {
+        let top = lua.top();
+        assert!(top > 0);
+
+        for (_k, v) in t.pairs::<i32, i32>() {
+            if v == 20 {
+                break;
+            }
+        }
+
+        assert_eq!(lua.top(), top);
+    });
+
+    assert_eq!(lua.top(), 0);
+}
