@@ -60,19 +60,21 @@ where
         Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
     }
 
-    pub(crate) fn owned(ptr: *mut sys::lua_State, idx: i32) -> Self {
+    pub(crate) fn owned(ptr: *mut sys::lua_State, idx: i32) -> TableRef {
         unsafe {
             let inner = InnerLua::from_ptr(ptr);
             sys::lua_pushvalue(ptr, idx);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Self::Owned(Rc::new(OwnedTable(inner, id, PhantomData)))
+            Table::<Owned>::Owned(Rc::new(OwnedTable(inner, id, PhantomData)))
         }
     }
 
-    pub fn to_owned(&self) -> Self {
+    pub fn to_owned(&self) -> TableRef {
         match self {
             Table::Borrowed(ptr, idx) => Self::owned(*ptr, *idx),
-            Table::Owned(inner) => Self::Owned(inner.clone()),
+            Table::Owned(inner) => {
+                Table::<Owned>::Owned(unsafe { std::mem::transmute(inner.clone()) })
+            }
         }
     }
 
@@ -160,10 +162,7 @@ where
     }
 }
 
-impl<M> Clone for Table<M>
-where
-    M: Mode,
-{
+impl Clone for TableRef {
     fn clone(&self) -> Self {
         self.to_owned()
     }
@@ -220,9 +219,9 @@ unsafe impl FromLua for StackTable {
 }
 
 unsafe impl FromLua for TableRef {
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
+    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<TableRef> {
         if unsafe { sys::lua_istable(ptr, idx) } != 0 {
-            Some(Table::owned(ptr, idx))
+            Some(Self::owned(ptr, idx))
         } else {
             None
         }

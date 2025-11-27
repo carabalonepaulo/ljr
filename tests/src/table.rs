@@ -642,7 +642,7 @@ fn test_table_builder_return_from_rust() {
     let result = lua.do_string::<bool>(
         r#"
         local api = require 'api'
-        local res = api.make_response(200)
+        local res = api:make_response(200)
         
         return res.status == 200 
            and res.ok == true 

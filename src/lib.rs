@@ -38,7 +38,7 @@ pub mod prelude {
     pub use crate::func::{FnRef, StackFn};
     pub use crate::lstr::{StackStr, StrRef};
     pub use crate::lua::Lua;
-    pub use crate::table::{StackTable, TableRef, builder::TableBuilder};
+    pub use crate::table::{StackTable, TableRef, builder::TableBuilder, view::TableView};
     pub use crate::ud::{StackUd, UdRef};
     pub use macros::{module, user_data};
 }
