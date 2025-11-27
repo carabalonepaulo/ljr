@@ -320,3 +320,31 @@ fn test_opt_str_arg() {
     assert!(matches!(result, Ok(true)));
     assert_eq!(lua.top(), 0);
 }
+
+#[test]
+fn test_opt_slice_arg() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test;
+
+    #[user_data]
+    impl Test {
+        fn len(&self, value: Option<&[u8]>) -> i32 {
+            value.map(|v| v.len()).unwrap_or(0) as _
+        }
+    }
+
+    lua.register("test", Test);
+
+    let result = lua.do_string::<bool>(
+        r#"
+        local test = require 'test'
+        local msg = 'soreto'
+        local len = test:len(msg)
+        return len == #msg
+        "#,
+    );
+    assert!(matches!(result, Ok(true)));
+    assert_eq!(lua.top(), 0);
+}

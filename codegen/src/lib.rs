@@ -89,8 +89,9 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                 if type_info.name().starts_with("Option<") {
                                     let opt_generic = &type_info.generics()[0];
                                     let inner_ty = opt_generic.inner_ty();
+                                    let opt_gen_ty_name = opt_generic.name();
                                     if opt_generic.ref_kind().is_some() {
-                                        if opt_generic.name() == "str" {
+                                        if opt_gen_ty_name == "str" ||  opt_gen_ty_name == "[u8]" {
                                             Some(quote! { <StackStr as ljr::from_lua::FromLua>::len() })
                                         } else {
                                             Some(quote! { <StackUd<#inner_ty> as ljr::from_lua::FromLua>::len() })
@@ -155,6 +156,24 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                                     .as_str()
                                                     .expect("lua string is not a valid rust string"),
                                             );
+                                        }
+
+                                        let #arg_name = #arg_final_value;
+                                    });
+                                } else if opt_generic.name() == "[u8]" {
+                                    let arg_opt = format_ident!("__{}_opt", arg_name);
+                                    let arg_tmp = format_ident!("__{}_tmp", arg_name);
+                                    let arg_final_value = format_ident!("__{}_final_value", arg_name);
+
+                                    call_args.push(quote_spanned! { arg_name.span() => #arg_name });
+                                    borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                        let #arg_opt = ljr::helper::from_lua_opt_str(ptr, &mut idx);
+                                        let #arg_tmp: StackStr;
+                                        let mut #arg_final_value: std::option::Option<&[u8]> = None;
+
+                                        if let Some(value) = #arg_opt {
+                                            #arg_tmp = value;
+                                            #arg_final_value = Some(#arg_tmp.as_slice());
                                         }
 
                                         let #arg_name = #arg_final_value;
