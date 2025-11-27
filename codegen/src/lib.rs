@@ -93,6 +93,8 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                     if opt_generic.ref_kind().is_some() {
                                         if opt_gen_ty_name == "str" ||  opt_gen_ty_name == "[u8]" {
                                             Some(quote! { <StackStr as ljr::from_lua::FromLua>::len() })
+                                        } else if SPECIAL_TYPES.iter().any(|n| opt_gen_ty_name.starts_with(n)) {
+                                            Some(quote! { <#inner_ty as ljr::from_lua::FromLua>::len() })
                                         } else {
                                             Some(quote! { <StackUd<#inner_ty> as ljr::from_lua::FromLua>::len() })
                                         }
@@ -145,7 +147,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
                                     call_args.push(quote_spanned! { arg_name.span() => #arg_name });
                                     borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                        let #arg_opt = ljr::helper::from_lua_opt_str(ptr, &mut idx);
+                                        let #arg_opt = ljr::helper::from_lua_opt_str(ptr, &mut idx)?;
                                         let #arg_tmp: StackStr;
                                         let mut #arg_final_value: std::option::Option<&str> = None;
 
@@ -167,7 +169,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
                                     call_args.push(quote_spanned! { arg_name.span() => #arg_name });
                                     borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                        let #arg_opt = ljr::helper::from_lua_opt_str(ptr, &mut idx);
+                                        let #arg_opt = ljr::helper::from_lua_opt_str(ptr, &mut idx)?;
                                         let #arg_tmp: StackStr;
                                         let mut #arg_final_value: std::option::Option<&[u8]> = None;
 
@@ -178,6 +180,27 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
                                         let #arg_name = #arg_final_value;
                                     });
+                                } else if SPECIAL_TYPES.iter().any(|n| opt_generic.name().starts_with(n)) {
+                                    let arg_opt = format_ident!("__{}_opt", arg_name);
+                                    let arg_inner = format_ident!("__{}_inner", arg_name);
+                                    let arg_ref = format_ident!("__{}_inner_ref", arg_name);
+                                    let arg_final_value = format_ident!("__{}_final_value", arg_name);
+                                    
+                                    let arg_gen_ty = opt_generic.inner_ty();
+
+                                    call_args.push(quote_spanned! { arg_name.span() => #arg_final_value });
+                                    borrow_steps.push(quote_spanned! { arg_ty.span() =>
+                                        let #arg_opt = ljr::helper::from_lua_opt::<#arg_gen_ty>(ptr, &mut idx)?;
+                                        let #arg_inner: StackStr;
+                                        let #arg_ref: &StackStr;
+                                        let mut #arg_final_value: std::option::Option<&#arg_gen_ty> = None;
+
+                                        if let Some(inner) = #arg_opt {
+                                            #arg_inner = inner;
+                                            #arg_ref = &#arg_inner;
+                                            #arg_final_value = Some(#arg_ref);
+                                        }
+                                    })
                                 } else {
                                     let arg_opt = format_ident!("__{}_opt", arg_name);
                                     let arg_inner = format_ident!("__{}_inner", arg_name);
@@ -189,7 +212,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
                                     call_args.push(quote_spanned! { arg_name.span() => #arg_final_value });
                                     borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                        let #arg_opt = ljr::helper::from_lua_opt_stack_ud::<#arg_gen_ty>(ptr, &mut idx);
+                                        let #arg_opt = ljr::helper::from_lua_opt_stack_ud::<#arg_gen_ty>(ptr, &mut idx)?;
                                         let #arg_inner: ljr::ud::Ud<ljr::Borrowed, #arg_gen_ty>;
                                         let #arg_tmp_ref: std::cell::Ref<'_, #arg_gen_ty>;
                                         let #arg_ref: &#arg_gen_ty;
@@ -207,14 +230,14 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                 safe_args.push(quote_spanned! { arg_ty.span() => ljr::lua::ensure_value_arg::<#inner_ty>(); });
                                 call_args.push(quote_spanned! { arg_name.span() => #arg_name });
                                 borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                    let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str);
+                                    let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str)?;
                                 })
                             }
                         } else {
                             safe_args.push(quote_spanned! { arg_ty.span() => ljr::lua::ensure_value_arg::<#arg_ty>(); });
                             call_args.push(quote_spanned! { arg_name.span() => #arg_name });
                             borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str);
+                                let #arg_name = ljr::helper::from_lua::<#arg_ty>(ptr, &mut idx, #arg_name_str)?;
                             })
                         }
                     } else {
@@ -235,17 +258,17 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                         } else if ty_name == "str" {
                             call_args.push(quote_spanned! { arg_name.span() => #arg_name.as_str().expect("lua string is not a valid rust string") });
                             borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                let #arg_name = ljr::helper::from_lua::<ljr::lstr::StackStr>(ptr, &mut idx, "&str");
+                                let #arg_name = ljr::helper::from_lua::<ljr::lstr::StackStr>(ptr, &mut idx, "&str")?;
                             });
                         } else if ty_name == "[u8]" {
                             call_args.push(quote_spanned! { arg_name.span() => #arg_name.as_slice() });
                             borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                let #arg_name = ljr::helper::from_lua::<ljr::lstr::StackStr>(ptr, &mut idx, "&[u8]");
+                                let #arg_name = ljr::helper::from_lua::<ljr::lstr::StackStr>(ptr, &mut idx, "&[u8]")?;
                             });
                         } else if SPECIAL_TYPES.iter().any(|n| type_info.name().starts_with(n)) {
                             call_args.push(quote_spanned! { arg_name.span() => #lua_ref #arg_name });
                             borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                #let_def #arg_name = ljr::helper::from_lua::<#ty_ident>(ptr, &mut idx, #arg_name_str);
+                                #let_def #arg_name = ljr::helper::from_lua::<#ty_ident>(ptr, &mut idx, #arg_name_str)?;
                             })
                         } else {
                             let (let_def, borrow_method, to_ref) = if is_mut {
@@ -258,7 +281,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
                             call_args.push(quote_spanned! { arg_name.span() => #arg_name });
                             borrow_steps.push(quote_spanned! { arg_ty.span() =>
-                                #let_def #guard_tmp_name = ljr::helper::from_lua_stack_ref::<#ty_ident>(ptr, &mut idx);
+                                #let_def #guard_tmp_name = ljr::helper::from_lua_stack_ref::<#ty_ident>(ptr, &mut idx)?;
                                 #let_def #arg_tmp_name = #guard_tmp_name.#borrow_method();
                                 let #arg_name = #to_ref #arg_tmp_name;
                             });
@@ -276,7 +299,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                     };
 
                     borrow_steps.push(quote! {
-                        #let_def __ud_guard = ljr::helper::from_lua_stack_ref::<#receiver_ty>(ptr, &mut idx);
+                        #let_def __ud_guard = ljr::helper::from_lua_stack_ref::<#receiver_ty>(ptr, &mut idx)?;
                         #let_def __ud_tmp_ref = __ud_guard.#borrow_method();
                         let __ud_ref = #to_ref __ud_tmp_ref;
                     });
@@ -286,13 +309,15 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
         let final_block = quote! {
             ljr::helper::catch(ptr, move || {
+                ljr::helper::check_arg_count(ptr, #arg_c)?;
+
                 #(#safe_args)*
 
                 let mut idx = 1;
 
                 #(#borrow_steps)*
 
-                #ud_ty::#fn_sym(#(#call_args),*)
+                Ok(#ud_ty::#fn_sym(#(#call_args),*))
             })
         };
 
@@ -301,7 +326,6 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                 name: #method_name.as_ptr() as _,
                 func: {
                     unsafe extern "C-unwind" fn trampoline(ptr: *mut ljr::sys::lua_State) -> std::ffi::c_int {
-                        ljr::helper::check_arg_count(ptr, #arg_c);
                         #final_block
                     }
                     trampoline

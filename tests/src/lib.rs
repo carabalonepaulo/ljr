@@ -1,5 +1,4 @@
 mod borrow_checker;
-mod expand;
 mod func;
 mod global;
 mod option;
