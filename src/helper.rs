@@ -130,27 +130,34 @@ where
     F: FnOnce() -> Result<R, String>,
     R: crate::to_lua::ToLua,
 {
-    let result = std::panic::catch_unwind(AssertUnwindSafe(f));
-    match result {
-        Ok(r) => match r {
-            Ok(r) => {
-                crate::to_lua::ToLua::to_lua(r, ptr);
-                <R as crate::to_lua::ToLua>::len() as _
-            }
-            Err(msg) => raise_error(ptr, msg),
-        },
-        Err(e) => {
-            let msg = {
-                let err_msg = if let Some(s) = e.downcast_ref::<String>() {
-                    s.clone()
-                } else if let Some(s) = e.downcast_ref::<&str>() {
-                    s.to_string()
-                } else {
-                    "unknown error".to_string()
+    let result: Result<std::ffi::c_int, String> = {
+        let result = std::panic::catch_unwind(AssertUnwindSafe(f));
+        match result {
+            Ok(r) => match r {
+                Ok(r) => {
+                    crate::to_lua::ToLua::to_lua(r, ptr);
+                    Ok(<R as crate::to_lua::ToLua>::len() as _)
+                }
+                Err(msg) => Err(msg),
+            },
+            Err(e) => {
+                let msg = {
+                    let err_msg = if let Some(s) = e.downcast_ref::<String>() {
+                        s.clone()
+                    } else if let Some(s) = e.downcast_ref::<&str>() {
+                        s.to_string()
+                    } else {
+                        "unknown error".to_string()
+                    };
+                    format!("Rust panic: {}", err_msg)
                 };
-                format!("Rust panic: {}", err_msg)
-            };
-            raise_error(ptr, msg)
+                Err(msg)
+            }
         }
+    };
+
+    match result {
+        Ok(n) => n,
+        Err(msg) => raise_error(ptr, msg),
     }
 }
