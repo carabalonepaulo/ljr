@@ -256,9 +256,11 @@ where
     M: Mode,
 {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
-        match self {
-            Table::Borrowed(_, idx) => unsafe { sys::lua_pushvalue(ptr, idx) },
-            Table::Owned(inner) => inner.0.push_ref(ptr, inner.1),
+        unsafe {
+            match self {
+                Table::Borrowed(_, idx) => sys::lua_pushvalue(ptr, idx),
+                Table::Owned(inner) => inner.0.push_ref(ptr, inner.1),
+            }
         }
     }
 }

@@ -139,11 +139,11 @@ where
     M: Mode,
 {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
-        match self {
-            LStr::Borrowed(_, idx, _) => unsafe {
-                sys::lua_pushvalue(ptr, idx);
-            },
-            LStr::Owned(inner, _) => inner.0.push_ref(ptr, inner.1),
+        unsafe {
+            match self {
+                LStr::Borrowed(_, idx, _) => sys::lua_pushvalue(ptr, idx),
+                LStr::Owned(inner, _) => inner.0.push_ref(ptr, inner.1),
+            }
         }
     }
 }
