@@ -3,7 +3,9 @@ pub mod constraints;
 pub mod view;
 
 use std::{
+    cmp::{Eq, PartialEq},
     collections::HashMap,
+    hash::{Hash, Hasher},
     marker::PhantomData,
     ops::{Deref, DerefMut},
     rc::Rc,
@@ -160,6 +162,13 @@ where
         src.iter()
             .for_each(|(k, v)| guard.set(k.clone(), v.clone()));
     }
+
+    fn state_ptr(&self) -> *mut sys::lua_State {
+        match self {
+            Table::Borrowed(ptr, _) => *ptr,
+            Table::Owned(inner) => inner.0.state(),
+        }
+    }
 }
 
 impl Clone for TableRef {
@@ -262,5 +271,39 @@ where
 {
     fn is_type(ptr: *mut crate::sys::lua_State, idx: i32) -> bool {
         unsafe { sys::lua_istable(ptr, idx) != 0 }
+    }
+}
+
+impl<M1: Mode, M2: Mode> PartialEq<Table<M2>> for Table<M1> {
+    fn eq(&self, other: &Table<M2>) -> bool {
+        let l_self = self.state_ptr();
+        let l_other = other.state_ptr();
+
+        if l_self != l_other {
+            return false;
+        }
+
+        unsafe {
+            (&self).to_lua(l_self);
+            (&other).to_lua(l_self);
+
+            let is_equal = sys::lua_rawequal(l_self, -1, -2) != 0;
+            sys::lua_pop(l_self, 2);
+            is_equal
+        }
+    }
+}
+
+impl<M: Mode> Eq for Table<M> {}
+
+impl<M: Mode> Hash for Table<M> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        let ptr = self.state_ptr();
+        unsafe {
+            (&self).to_lua(ptr);
+            let lua_ptr = sys::lua_topointer(ptr, -1);
+            sys::lua_pop(ptr, 1);
+            lua_ptr.hash(state);
+        }
     }
 }
