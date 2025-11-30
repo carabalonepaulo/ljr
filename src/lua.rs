@@ -37,6 +37,16 @@ pub struct InnerLua {
     owned: bool,
     thread_ref: Option<i32>,
     cache_key: *mut std::ffi::c_void,
+    vm_id: *const std::ffi::c_void,
+}
+
+pub(crate) unsafe fn get_vm_id(ptr: *mut sys::lua_State) -> *const std::ffi::c_void {
+    unsafe {
+        sys::lua_pushvalue(ptr, sys::LUA_REGISTRYINDEX);
+        let id = sys::lua_topointer(ptr, -1);
+        sys::lua_pop(ptr, 1);
+        id
+    }
 }
 
 impl InnerLua {
@@ -104,11 +114,23 @@ impl InnerLua {
                 owned: false,
                 thread_ref,
                 cache_key,
+                vm_id: get_vm_id(ptr),
             });
 
             Self::create_and_cache_sentinel(ptr, cache_key, inner.clone());
             inner
         }
+    }
+
+    pub(crate) fn push_ref(&self, dest_ptr: *mut sys::lua_State, id: i32) {
+        let _ = self.state();
+        let target_vm_id = unsafe { crate::lua::get_vm_id(dest_ptr) };
+
+        if self.vm_id != target_vm_id {
+            panic!("unsafe cross-vm operation: UserData belongs to a different Lua state")
+        }
+
+        unsafe { sys::lua_rawgeti(dest_ptr, sys::LUA_REGISTRYINDEX, id as _) };
     }
 
     pub(crate) fn state(&self) -> *mut sys::lua_State {
@@ -164,6 +186,7 @@ impl Lua {
             owned: true,
             thread_ref: None,
             cache_key,
+            vm_id: unsafe { get_vm_id(ptr) },
         });
 
         unsafe { InnerLua::create_and_cache_sentinel(ptr, cache_key, inner.clone()) };

@@ -207,9 +207,7 @@ where
         unsafe {
             match self {
                 Ud::Borrowed(_, idx) => sys::lua_pushvalue(ptr, idx),
-                Ud::Owned(ud) => {
-                    sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, ud.1 as _);
-                }
+                Ud::Owned(ud) => ud.0.push_ref(ptr, ud.1),
             }
         }
     }

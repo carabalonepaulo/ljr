@@ -143,9 +143,7 @@ where
             LStr::Borrowed(_, idx, _) => unsafe {
                 sys::lua_pushvalue(ptr, idx);
             },
-            LStr::Owned(inner, _) => unsafe {
-                sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
-            },
+            LStr::Owned(inner, _) => inner.0.push_ref(ptr, inner.1),
         }
     }
 }
