@@ -37,12 +37,6 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
         _ => panic!("invalid type identifier"),
     };
     let ud_ty = impl_block.self_ty.clone();
-    let ud_ty_name = {
-        let buf = ud_name.as_bytes();
-        let mut nul_terminated = buf.to_vec();
-        nul_terminated.push(0);
-        syn::LitByteStr::new(&nul_terminated, Span::call_site())
-    };
 
     let methods = impl_block.body_items.iter().filter_map(|item| match item {
         venial::ImplMember::AssocFunction(f) => Some(f),
@@ -357,7 +351,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
         impl ljr::UserData for #ud_ty {
             fn name() -> *const i8 {
-                #ud_ty_name.as_ptr() as _
+                concat!(env!("CARGO_PKG_NAME"), "_", stringify!(#ud_ty), "\0").as_ptr() as _
             }
 
             fn functions() -> &'static [ljr::sys::luaL_Reg] {
