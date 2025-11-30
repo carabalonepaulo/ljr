@@ -81,8 +81,8 @@ where
                     unsafe {
                         let ud_ptr = sys::lua_touserdata(ptr, 1) as *mut *mut RefCell<T>;
                         if !ud_ptr.is_null() && !(*ud_ptr).is_null() {
-                            *ud_ptr = std::ptr::null_mut();
                             std::mem::drop(Box::from_raw(*ud_ptr));
+                            *ud_ptr = std::ptr::null_mut();
                         }
                     }
                     0
