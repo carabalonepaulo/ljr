@@ -122,7 +122,7 @@ impl InnerLua {
         }
     }
 
-    pub(crate) fn push_ref(&self, dest_ptr: *mut sys::lua_State, id: i32) {
+    pub(crate) unsafe fn push_ref(&self, dest_ptr: *mut sys::lua_State, id: i32) {
         let _ = self.state();
         let target_vm_id = unsafe { crate::lua::get_vm_id(dest_ptr) };
 
