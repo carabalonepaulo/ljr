@@ -17,62 +17,65 @@ use crate::{
 
 static CTX_KEY: u8 = 0;
 
-unsafe extern "C-unwind" fn sentinel_gc(ptr: *mut sys::lua_State) -> std::ffi::c_int {
+unsafe extern "C-unwind" fn individual_sentinel_gc(ptr: *mut sys::lua_State) -> i32 {
     unsafe {
-        let ctx_key = &CTX_KEY as *const u8 as *mut std::ffi::c_void;
-        sys::lua_pushlightuserdata(ptr, ctx_key);
-        sys::lua_gettable(ptr, sys::LUA_REGISTRYINDEX);
-
-        let weak_ptr = sys::lua_touserdata(ptr, -1) as *mut std::rc::Weak<InnerLua>;
-        sys::lua_pop(ptr, 1);
-
-        sys::lua_pushlightuserdata(ptr, ctx_key);
-        sys::lua_pushnil(ptr);
-        sys::lua_settable(ptr, sys::LUA_REGISTRYINDEX);
-
+        let weak_ptr = sys::lua_touserdata(ptr, 1) as *mut std::rc::Weak<InnerLua>;
         if !weak_ptr.is_null() {
-            let weak = Box::from_raw(weak_ptr);
+            let weak = &*weak_ptr;
             if let Some(inner) = weak.upgrade() {
                 inner.state.set(ptr::null_mut());
             }
+            ptr::drop_in_place(weak_ptr);
         }
+        0
     }
-    0
 }
 
 #[derive(Debug)]
 pub struct InnerLua {
     state: Cell<*mut sys::lua_State>,
     owned: bool,
+    thread_ref: Option<i32>,
+    cache_key: *mut std::ffi::c_void,
 }
 
 impl InnerLua {
-    unsafe fn attach_sentinel(ptr: *mut sys::lua_State, inner: Rc<InnerLua>) {
-        let ctx_key = &CTX_KEY as *const u8 as *mut std::ffi::c_void;
-        let weak = Rc::downgrade(&inner);
-        let weak_ptr = Box::into_raw(Box::new(weak));
-
+    unsafe fn create_and_cache_sentinel(
+        ptr: *mut sys::lua_State,
+        key: *mut std::ffi::c_void,
+        inner: Rc<InnerLua>,
+    ) {
         unsafe {
-            sys::lua_pushlightuserdata(ptr, ctx_key);
-            sys::lua_pushlightuserdata(ptr, weak_ptr as *mut _);
-            sys::lua_settable(ptr, sys::LUA_REGISTRYINDEX);
+            sys::lua_pushlightuserdata(ptr, key);
+            let size = std::mem::size_of::<std::rc::Weak<InnerLua>>();
+            let udata = sys::lua_newuserdata(ptr, size) as *mut std::rc::Weak<InnerLua>;
 
-            let _ = sys::lua_newuserdata(ptr, 0);
-            sys::lua_newtable(ptr);
-            sys::lua_pushstring(ptr, c"__gc".as_ptr());
-            sys::lua_pushcfunction(ptr, sentinel_gc);
-            sys::lua_settable(ptr, -3);
+            ptr::write(udata, Rc::downgrade(&inner));
+
+            if sys::luaL_newmetatable(ptr, c"__LJR_GUARD".as_ptr()) == 1 {
+                sys::lua_pushstring(ptr, c"__gc".as_ptr());
+                sys::lua_pushcfunction(ptr, individual_sentinel_gc);
+                sys::lua_settable(ptr, -3);
+            }
             sys::lua_setmetatable(ptr, -2);
 
-            sys::lua_setfield(ptr, sys::LUA_REGISTRYINDEX, c"__LJR_SENTINEL".as_ptr());
+            sys::lua_settable(ptr, sys::LUA_REGISTRYINDEX);
         }
     }
 
     pub(crate) fn from_ptr(ptr: *mut sys::lua_State) -> Rc<Self> {
         unsafe {
-            let ctx_key = &CTX_KEY as *const u8 as *mut std::ffi::c_void;
+            let is_main = sys::lua_pushthread(ptr) == 1;
+            let thread_val_on_stack = !is_main;
 
-            sys::lua_pushlightuserdata(ptr, ctx_key);
+            let cache_key = if is_main {
+                sys::lua_pop(ptr, 1);
+                &CTX_KEY as *const u8 as *mut std::ffi::c_void
+            } else {
+                ptr as *mut std::ffi::c_void
+            };
+
+            sys::lua_pushlightuserdata(ptr, cache_key);
             sys::lua_gettable(ptr, sys::LUA_REGISTRYINDEX);
 
             let data_ptr = sys::lua_touserdata(ptr, -1);
@@ -81,18 +84,29 @@ impl InnerLua {
             if !data_ptr.is_null() {
                 let weak_ptr = data_ptr as *mut std::rc::Weak<InnerLua>;
                 let weak = &*weak_ptr;
+
                 if let Some(rc) = weak.upgrade() {
+                    if thread_val_on_stack {
+                        sys::lua_pop(ptr, 1);
+                    }
                     return rc;
                 }
             }
 
+            let thread_ref = if is_main {
+                None
+            } else {
+                Some(sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX))
+            };
+
             let inner = Rc::new(InnerLua {
                 state: Cell::new(ptr),
                 owned: false,
+                thread_ref,
+                cache_key,
             });
 
-            Self::attach_sentinel(ptr, inner.clone());
-
+            Self::create_and_cache_sentinel(ptr, cache_key, inner.clone());
             inner
         }
     }
@@ -114,8 +128,20 @@ impl InnerLua {
 impl Drop for InnerLua {
     fn drop(&mut self) {
         let ptr = self.state.get();
-        if !ptr.is_null() && self.owned {
-            unsafe { sys::lua_close(ptr) };
+        if !ptr.is_null() {
+            unsafe {
+                if let Some(r) = self.thread_ref {
+                    sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, r);
+                }
+
+                if self.owned {
+                    sys::lua_close(ptr);
+                } else {
+                    sys::lua_pushlightuserdata(ptr, self.cache_key);
+                    sys::lua_pushnil(ptr);
+                    sys::lua_settable(ptr, sys::LUA_REGISTRYINDEX);
+                }
+            }
         }
     }
 }
@@ -128,11 +154,20 @@ pub struct Lua {
 impl Lua {
     pub fn new() -> Self {
         let ptr = unsafe { sys::luaL_newstate() };
+        if ptr.is_null() {
+            panic!("lua out of memory: failed to create state");
+        }
+
+        let cache_key = &CTX_KEY as *const u8 as *mut std::ffi::c_void;
         let inner = Rc::new(InnerLua {
             state: Cell::new(ptr),
             owned: true,
+            thread_ref: None,
+            cache_key,
         });
-        unsafe { InnerLua::attach_sentinel(ptr, inner.clone()) };
+
+        unsafe { InnerLua::create_and_cache_sentinel(ptr, cache_key, inner.clone()) };
+
         Self { inner }
     }
 
