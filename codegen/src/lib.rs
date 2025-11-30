@@ -185,8 +185,8 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                     call_args.push(quote_spanned! { arg_name.span() => #arg_final_value });
                                     borrow_steps.push(quote_spanned! { arg_ty.span() =>
                                         let #arg_opt = ljr::helper::from_lua_opt::<#arg_gen_ty>(ptr, &mut idx)?;
-                                        let #arg_inner: StackStr;
-                                        let #arg_ref: &StackStr;
+                                        let #arg_inner: #arg_gen_ty;
+                                        let #arg_ref: &#arg_gen_ty;
                                         let mut #arg_final_value: std::option::Option<&#arg_gen_ty> = None;
 
                                         if let Some(inner) = #arg_opt {
