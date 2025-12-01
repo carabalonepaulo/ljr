@@ -41,8 +41,8 @@ where
 
 #[derive(Debug)]
 pub enum Table<M: Mode> {
-    Borrowed(*mut sys::lua_State, i32),
-    Owned(Rc<OwnedTable<M>>),
+    Borrowed(*mut sys::lua_State, i32, *const std::ffi::c_void),
+    Owned(Rc<OwnedTable<M>>, *const std::ffi::c_void),
 }
 
 impl<M> Table<M>
@@ -53,40 +53,46 @@ where
         unsafe {
             let ptr = inner_lua.state();
             sys::lua_newtable(ptr);
+            let table_ptr = sys::lua_topointer(ptr, -1);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Self::Owned(Rc::new(OwnedTable(inner_lua, id, PhantomData)))
+            Self::Owned(Rc::new(OwnedTable(inner_lua, id, PhantomData)), table_ptr)
         }
     }
 
     pub(crate) fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
-        Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
+        unsafe {
+            let idx = sys::lua_absindex(ptr, idx);
+            let table_ptr = sys::lua_topointer(ptr, idx);
+            Self::Borrowed(ptr, idx, table_ptr)
+        }
     }
 
     pub(crate) fn owned(ptr: *mut sys::lua_State, idx: i32) -> TableRef {
         unsafe {
             let inner = InnerLua::from_ptr(ptr);
             sys::lua_pushvalue(ptr, idx);
+            let table_ptr = sys::lua_topointer(ptr, -1);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Table::<Owned>::Owned(Rc::new(OwnedTable(inner, id, PhantomData)))
+            Table::<Owned>::Owned(Rc::new(OwnedTable(inner, id, PhantomData)), table_ptr)
         }
     }
 
     pub fn to_owned(&self) -> TableRef {
         match self {
-            Table::Borrowed(ptr, idx) => Self::owned(*ptr, *idx),
-            Table::Owned(inner) => {
-                Table::<Owned>::Owned(unsafe { std::mem::transmute(inner.clone()) })
+            Table::Borrowed(ptr, idx, _) => Self::owned(*ptr, *idx),
+            Table::Owned(inner, tptr) => {
+                Table::<Owned>::Owned(unsafe { std::mem::transmute(inner.clone()) }, *tptr)
             }
         }
     }
 
     pub fn as_ref<'t>(&'t self) -> Guard<'t> {
         let ptr = match self {
-            Table::Borrowed(ptr, idx) => unsafe {
+            Table::Borrowed(ptr, idx, _) => unsafe {
                 sys::lua_pushvalue(*ptr, *idx);
                 *ptr
             },
-            Table::Owned(inner) => unsafe {
+            Table::Owned(inner, _) => unsafe {
                 let ptr = inner.0.state();
                 sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
                 ptr
@@ -101,11 +107,11 @@ where
 
     pub fn as_mut<'t>(&'t mut self) -> GuardMut<'t> {
         let ptr = match self {
-            Table::Borrowed(ptr, idx) => unsafe {
+            Table::Borrowed(ptr, idx, _) => unsafe {
                 sys::lua_pushvalue(*ptr, *idx);
                 *ptr
             },
-            Table::Owned(inner) => unsafe {
+            Table::Owned(inner, _) => unsafe {
                 let ptr = inner.0.state();
                 sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
                 ptr
@@ -130,11 +136,11 @@ where
 
     pub fn len(&self) -> usize {
         let ptr = match self {
-            Table::Borrowed(ptr, idx) => unsafe {
+            Table::Borrowed(ptr, idx, _) => unsafe {
                 sys::lua_pushvalue(*ptr, *idx);
                 *ptr
             },
-            Table::Owned(inner) => unsafe {
+            Table::Owned(inner, _) => unsafe {
                 let ptr = inner.0.state();
                 sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
                 ptr
@@ -163,10 +169,10 @@ where
             .for_each(|(k, v)| guard.set(k.clone(), v.clone()));
     }
 
-    fn state_ptr(&self) -> *mut sys::lua_State {
+    fn internal_ptr(&self) -> *const std::ffi::c_void {
         match self {
-            Table::Borrowed(ptr, _) => *ptr,
-            Table::Owned(inner) => inner.0.state(),
+            Self::Borrowed(_, _, tptr) => *tptr,
+            Self::Owned(_, tptr) => *tptr,
         }
     }
 }
@@ -243,8 +249,8 @@ where
 {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         match self {
-            Table::Borrowed(_, idx) => unsafe { sys::lua_pushvalue(ptr, *idx) },
-            Table::Owned(inner) => unsafe {
+            Table::Borrowed(_, idx, _) => unsafe { sys::lua_pushvalue(ptr, *idx) },
+            Table::Owned(inner, _) => unsafe {
                 sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, inner.1 as _);
             },
         }
@@ -258,8 +264,8 @@ where
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         unsafe {
             match self {
-                Table::Borrowed(_, idx) => sys::lua_pushvalue(ptr, idx),
-                Table::Owned(inner) => inner.0.push_ref(ptr, inner.1),
+                Table::Borrowed(_, idx, _) => sys::lua_pushvalue(ptr, idx),
+                Table::Owned(inner, _) => inner.0.push_ref(ptr, inner.1),
             }
         }
     }
@@ -276,21 +282,7 @@ where
 
 impl<M1: Mode, M2: Mode> PartialEq<Table<M2>> for Table<M1> {
     fn eq(&self, other: &Table<M2>) -> bool {
-        let l_self = self.state_ptr();
-        let l_other = other.state_ptr();
-
-        if l_self != l_other {
-            return false;
-        }
-
-        unsafe {
-            (&self).to_lua(l_self);
-            (&other).to_lua(l_self);
-
-            let is_equal = sys::lua_rawequal(l_self, -1, -2) != 0;
-            sys::lua_pop(l_self, 2);
-            is_equal
-        }
+        self.internal_ptr() == other.internal_ptr()
     }
 }
 
@@ -298,12 +290,6 @@ impl<M: Mode> Eq for Table<M> {}
 
 impl<M: Mode> Hash for Table<M> {
     fn hash<H: Hasher>(&self, state: &mut H) {
-        let ptr = self.state_ptr();
-        unsafe {
-            (&self).to_lua(ptr);
-            let lua_ptr = sys::lua_topointer(ptr, -1);
-            sys::lua_pop(ptr, 1);
-            lua_ptr.hash(state);
-        }
+        self.internal_ptr().hash(state);
     }
 }
