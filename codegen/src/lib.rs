@@ -328,7 +328,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
         }
     });
 
-    let mut count = 1;
+    let mut count = 2;
     let mut reg_list = quote! {};
     for reg in regs {
         reg_list.extend(quote! { #reg, });
@@ -343,6 +343,10 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
         const #regs_ident: [ljr::sys::luaL_Reg; #regs_count] = [
             #reg_list
+            ljr::sys::luaL_Reg {
+                name: concat!("__META_", stringify!(#ud_ty), "\0").as_ptr() as _,
+                func: ljr::dummy_trampoline,
+            },
             ljr::sys::luaL_Reg {
                 name: std::ptr::null(),
                 func: ljr::dummy_trampoline,

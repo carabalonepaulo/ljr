@@ -72,6 +72,10 @@ where
             if sys::luaL_newmetatable(ptr, name) != 0 {
                 let mt_idx = sys::lua_gettop(ptr);
 
+                let type_id = T::functions().as_ptr() as *mut std::ffi::c_void;
+                sys::lua_pushlightuserdata(ptr, type_id);
+                sys::lua_rawseti(ptr, mt_idx, 1);
+
                 sys::lua_pushstring(ptr, name);
                 sys::lua_setfield(ptr, mt_idx, c"__name".as_ptr());
 

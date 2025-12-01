@@ -1,6 +1,5 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
-    ffi::CStr,
     marker::PhantomData,
     rc::Rc,
 };
@@ -132,17 +131,17 @@ where
                 return None;
             }
 
-            sys::lua_getfield(ptr, -1, c"__name".as_ptr());
-            let mt_name = sys::lua_tostring(ptr, -1);
+            sys::lua_rawgeti(ptr, -1, 1);
+            let type_id = sys::lua_tolightuserdata(ptr, -1);
+            sys::lua_pop(ptr, 1);
 
-            let mt = CStr::from_ptr(mt_name);
-            let expected = CStr::from_ptr(T::name());
-            if mt != expected {
-                sys::lua_pop(ptr, 3);
+            let expected_type_id = T::functions().as_ptr() as *mut std::ffi::c_void;
+            if type_id != expected_type_id {
+                sys::lua_pop(ptr, 2);
                 return None;
             }
 
-            sys::lua_pop(ptr, 3);
+            sys::lua_pop(ptr, 2);
         }
 
         Some(Ud::<Borrowed, T>::borrowed(ptr, idx))
@@ -162,18 +161,17 @@ where
                 return None;
             }
 
-            sys::lua_getfield(ptr, -1, c"__name".as_ptr());
-            let mt_name = sys::lua_tostring(ptr, -1);
+            sys::lua_rawgeti(ptr, -1, 1);
+            let type_id = sys::lua_tolightuserdata(ptr, -1);
+            sys::lua_pop(ptr, 1);
 
-            let mt = CStr::from_ptr(mt_name);
-            let expected = CStr::from_ptr(T::name());
-            if mt != expected {
-                sys::lua_pop(ptr, 3);
+            let expected_type_id = T::functions().as_ptr() as *mut std::ffi::c_void;
+            if type_id != expected_type_id {
+                sys::lua_pop(ptr, 2);
                 return None;
             }
 
-            sys::lua_pop(ptr, 2);
-
+            sys::lua_pop(ptr, 1);
             let value = Some(Self::owned(InnerLua::from_ptr(ptr), idx));
             sys::lua_pop(ptr, 1);
             value
