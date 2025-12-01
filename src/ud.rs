@@ -1,5 +1,6 @@
 use std::{
     cell::{Ref, RefCell, RefMut},
+    hash::{Hash, Hasher},
     marker::PhantomData,
     rc::Rc,
 };
@@ -27,8 +28,8 @@ where
 }
 
 pub enum Ud<M: Mode, T: UserData> {
-    Borrowed(*mut sys::lua_State, i32),
-    Owned(Rc<OwnedUserData<M, T>>),
+    Borrowed(*mut sys::lua_State, i32, *mut *mut RefCell<T>),
+    Owned(Rc<OwnedUserData<M, T>>, *mut *mut RefCell<T>),
 }
 
 impl<M, T> Ud<M, T>
@@ -37,41 +38,38 @@ where
     T: UserData,
 {
     pub(crate) fn borrowed(ptr: *mut sys::lua_State, idx: i32) -> Self {
-        Self::Borrowed(ptr, unsafe { sys::lua_absindex(ptr, idx) })
+        let ud_ptr = unsafe { sys::lua_touserdata(ptr, idx) } as *mut *mut RefCell<T>;
+        let abs_idx = unsafe { sys::lua_absindex(ptr, idx) };
+        Self::Borrowed(ptr, abs_idx, ud_ptr)
     }
 
     pub(crate) fn owned(inner: Rc<InnerLua>, idx: i32) -> Self {
         unsafe {
             let ptr = inner.state();
             let idx = sys::lua_absindex(ptr, idx);
+            let ud_ptr = sys::lua_touserdata(ptr, idx) as *mut *mut RefCell<T>;
             sys::lua_pushvalue(ptr, idx);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            Self::Owned(Rc::new(OwnedUserData(inner, id, PhantomData)))
+            Self::Owned(Rc::new(OwnedUserData(inner, id, PhantomData)), ud_ptr)
         }
     }
 
     pub fn to_owned(&self) -> Self {
         match self {
-            Ud::Borrowed(ptr, idx) => Self::owned(InnerLua::from_ptr(*ptr), *idx),
-            Ud::Owned(ud) => Self::Owned(ud.clone()),
+            Ud::Borrowed(ptr, idx, _) => Self::owned(InnerLua::from_ptr(*ptr), *idx),
+            Ud::Owned(ud, ud_ptr) => Self::Owned(ud.clone(), *ud_ptr),
         }
     }
 
     pub fn as_ref(&self) -> Ref<'_, T> {
         match self {
-            Ud::Borrowed(ptr, idx) => unsafe {
-                let ud_ptr = sys::lua_touserdata(*ptr, *idx) as *const *const RefCell<T>;
-                let cell: &RefCell<T> = &**ud_ptr;
+            Ud::Borrowed(_, _, ud_ptr) => unsafe {
+                let cell: &RefCell<T> = &***ud_ptr;
                 cell.borrow()
             },
-            Ud::Owned(ud) => unsafe {
-                let (ptr, id) = (ud.0.state(), ud.1);
-
-                sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id as _);
-                let ud_ptr = sys::lua_touserdata(ptr, -1) as *const *const RefCell<T>;
-                sys::lua_pop(ptr, 1);
-
-                let cell: &RefCell<T> = &**ud_ptr;
+            Ud::Owned(ud, ud_ptr) => unsafe {
+                let _ = ud.0.state();
+                let cell: &RefCell<T> = &***ud_ptr;
                 cell.borrow()
             },
         }
@@ -79,19 +77,13 @@ where
 
     pub fn as_mut(&mut self) -> RefMut<'_, T> {
         match self {
-            Ud::Borrowed(ptr, idx) => unsafe {
-                let ud_ptr = sys::lua_touserdata(*ptr, *idx) as *mut *mut RefCell<T>;
-                let cell: &RefCell<T> = &mut **ud_ptr;
+            Ud::Borrowed(_, _, ud_ptr) => unsafe {
+                let cell: &RefCell<T> = &mut ***ud_ptr;
                 cell.borrow_mut()
             },
-            Ud::Owned(ud) => unsafe {
-                let (ptr, id) = (ud.0.state(), ud.1);
-
-                sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, id as _);
-                let ud_ptr = sys::lua_touserdata(ptr, -1) as *mut *mut RefCell<T>;
-                sys::lua_pop(ptr, 1);
-
-                let cell: &RefCell<T> = &mut **ud_ptr;
+            Ud::Owned(ud, ud_ptr) => unsafe {
+                let _ = ud.0.state();
+                let cell: &RefCell<T> = &mut ***ud_ptr;
                 cell.borrow_mut()
             },
         }
@@ -105,6 +97,13 @@ where
     pub fn with_mut<F: FnOnce(&mut T) -> R, R>(&mut self, f: F) -> R {
         let mut guard = self.as_mut();
         f(&mut *guard)
+    }
+
+    fn internal_ptr(&self) -> *mut *mut RefCell<T> {
+        match self {
+            Ud::Borrowed(_, _, ud_ptr) => *ud_ptr,
+            Ud::Owned(_, ud_ptr) => *ud_ptr,
+        }
     }
 }
 
@@ -187,8 +186,8 @@ where
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         unsafe {
             match self {
-                Ud::Borrowed(_, idx) => sys::lua_pushvalue(ptr, *idx),
-                Ud::Owned(ud) => {
+                Ud::Borrowed(_, idx, _) => sys::lua_pushvalue(ptr, *idx),
+                Ud::Owned(ud, _) => {
                     sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, ud.1 as _);
                 }
             }
@@ -204,9 +203,23 @@ where
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         unsafe {
             match self {
-                Ud::Borrowed(_, idx) => sys::lua_pushvalue(ptr, idx),
-                Ud::Owned(ud) => ud.0.push_ref(ptr, ud.1),
+                Ud::Borrowed(_, idx, _) => sys::lua_pushvalue(ptr, idx),
+                Ud::Owned(ud, _) => ud.0.push_ref(ptr, ud.1),
             }
         }
+    }
+}
+
+impl<M1: Mode, M2: Mode, T: UserData> PartialEq<Ud<M2, T>> for Ud<M1, T> {
+    fn eq(&self, other: &Ud<M2, T>) -> bool {
+        self.internal_ptr() == other.internal_ptr()
+    }
+}
+
+impl<M: Mode, T: UserData> Eq for Ud<M, T> {}
+
+impl<M: Mode, T: UserData> Hash for Ud<M, T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.internal_ptr().hash(state);
     }
 }
