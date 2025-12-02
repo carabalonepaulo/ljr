@@ -273,7 +273,7 @@ unsafe impl FromLua for TableRef {
     }
 }
 
-unsafe impl ToLua for StackTable {
+unsafe impl ToLua for &StackTable {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         if ptr != self.state.ptr {
             panic!("unsafe cross-vm operation: Table belongs to a different Lua state");
@@ -282,9 +282,21 @@ unsafe impl ToLua for StackTable {
     }
 }
 
-unsafe impl ToLua for TableRef {
+unsafe impl ToLua for StackTable {
+    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+        (&self).to_lua(ptr);
+    }
+}
+
+unsafe impl ToLua for &TableRef {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         unsafe { self.state.inner.lua.push_ref(ptr, self.state.inner.id) };
+    }
+}
+
+unsafe impl ToLua for TableRef {
+    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+        (&self).to_lua(ptr);
     }
 }
 
