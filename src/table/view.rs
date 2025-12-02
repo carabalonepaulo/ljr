@@ -108,6 +108,53 @@ impl<'t> TableView<'t> {
         unsafe { sys::lua_objlen(self.0, self.1) }
     }
 
+    pub fn insert(&mut self, index: i32, value: impl ToLua) {
+        let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
+
+        let effective_idx = if index < 1 { 1 } else { index };
+        let effective_idx = if effective_idx > len + 1 {
+            len + 1
+        } else {
+            effective_idx
+        };
+
+        for i in (effective_idx..=len).rev() {
+            unsafe {
+                sys::lua_rawgeti(self.0, self.1, i as _);
+                sys::lua_rawseti(self.0, self.1, (i + 1) as _);
+            }
+        }
+
+        value.to_lua(self.0);
+        unsafe { sys::lua_rawseti(self.0, self.1, effective_idx as _) };
+    }
+
+    pub fn remove<T: FromLua + ValueArg>(&mut self, index: i32) -> Option<T> {
+        let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
+
+        if index < 1 || index > len {
+            return None;
+        }
+
+        unsafe { sys::lua_rawgeti(self.0, self.1, index as _) };
+        let val = <T as FromLua>::from_lua(self.0, -1);
+        unsafe { sys::lua_pop(self.0, 1) };
+
+        for i in index..len {
+            unsafe {
+                sys::lua_rawgeti(self.0, self.1, (i + 1) as _);
+                sys::lua_rawseti(self.0, self.1, i as _);
+            }
+        }
+
+        unsafe {
+            sys::lua_pushnil(self.0);
+            sys::lua_rawseti(self.0, self.1, len as _);
+        }
+
+        val
+    }
+
     pub fn for_each<K, V, F>(&self, mut f: F)
     where
         K: FromLua,

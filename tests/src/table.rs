@@ -653,3 +653,191 @@ fn test_table_builder_return_from_rust() {
     assert_eq!(result, Ok(true));
     assert_eq!(lua.top(), 0);
 }
+
+#[test]
+fn test_table_insert_basic() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { 10, 20, 30 });
+
+    table.with_mut(|t| {
+        t.insert(2, 15);
+    });
+
+    let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
+    assert_eq!(values, vec![10, 15, 20, 30]);
+    assert_eq!(table.len(), 4);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_insert_boundaries() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { "b" });
+
+    table.with_mut(|t| {
+        t.insert(1, "a");
+        t.insert(3, "c");
+    });
+
+    let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
+    assert_eq!(values, vec!["a", "b", "c"]);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_insert_clamping() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { 10 });
+
+    table.with_mut(|t| {
+        t.insert(-5, 0);
+        t.insert(100, 20);
+    });
+
+    let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
+    assert_eq!(values, vec![0, 10, 20]);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_remove_basic() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { 10, 20, 30, 40 });
+
+    table.with_mut(|t| {
+        let removed = t.remove::<i32>(2);
+        assert_eq!(removed, Some(20));
+    });
+
+    let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
+    assert_eq!(values, vec![10, 30, 40]);
+    assert_eq!(table.len(), 3);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_remove_boundaries() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { "a", "b", "c" });
+
+    table.with_mut(|t| {
+        let first = t.remove::<String>(1);
+        assert_eq!(first.as_deref(), Some("a"));
+
+        let last = t.remove::<String>(2);
+        assert_eq!(last.as_deref(), Some("c"));
+    });
+
+    let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
+    assert_eq!(values, vec!["b"]);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_remove_invalid_index() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { 10, 20 });
+
+    table.with_mut(|t| {
+        let zero = t.remove::<i32>(0);
+        assert_eq!(zero, None);
+
+        let overflow = t.remove::<i32>(3);
+        assert_eq!(overflow, None);
+    });
+
+    assert_eq!(table.len(), 2);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_table_insert_remove_integration() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, {});
+
+    table.with_mut(|t| {
+        t.insert(1, 10);
+        t.insert(1, 20);
+        t.insert(1, 30);
+
+        assert_eq!(t.len(), 3);
+
+        let v1 = t.remove::<i32>(1);
+        assert_eq!(v1, Some(30));
+
+        let v2 = t.remove::<i32>(2);
+        assert_eq!(v2, Some(10));
+    });
+
+    let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
+    assert_eq!(values, vec![20]);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_remove_returns_ud() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Item {
+        val: i32,
+    }
+    #[user_data]
+    impl Item {
+        fn get(&self) -> i32 {
+            self.val
+        }
+    }
+
+    struct Factory;
+    #[user_data]
+    impl Factory {
+        fn new(val: i32) -> Item {
+            Item { val }
+        }
+    }
+
+    lua.register("factory", Factory);
+
+    let mut table = lua
+        .do_string::<TableRef>(
+            r#"
+        local F = require 'factory'
+        return { F.new(100), F.new(200), F.new(300) }
+    "#,
+        )
+        .unwrap();
+
+    table.with_mut(|t| {
+        let ud = t.remove::<UdRef<Item>>(2).expect("Should return userdata");
+        assert_eq!(ud.as_ref().get(), 200);
+    });
+
+    assert_eq!(table.len(), 2);
+
+    let sum = table.with(|t| {
+        let mut s = 0;
+        t.for_each::<i32, StackUd<Item>, _>(|_, item| {
+            s += item.as_ref().get();
+            true
+        });
+        s
+    });
+
+    assert_eq!(sum, 100 + 300);
+    assert_eq!(lua.top(), 0);
+}

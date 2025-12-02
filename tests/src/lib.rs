@@ -387,7 +387,7 @@ fn test_ud_fn_wrong_arg_count_error() {
         }
     }
     lua.register("test", Test);
-    let value = lua.do_string::<i32>("local test = require 'test'; return test.sum(10)"); // Apenas 1 argumento
+    let value = lua.do_string::<i32>("local test = require 'test'; return test.sum(10)");
     let err_msg = "wrong number of arguments";
     assert!(matches!(value, Err(Error::LuaError(msg)) if msg.contains(err_msg)));
     assert_eq!(lua.top(), 0);
@@ -405,7 +405,7 @@ fn test_ud_fn_wrong_arg_type_error() {
         }
     }
     lua.register("test", Test);
-    let value = lua.do_string::<i32>("local test = require 'test'; return test.sum(10, 'hello')"); // String em vez de i32
+    let value = lua.do_string::<i32>("local test = require 'test'; return test.sum(10, 'hello')");
     assert!(matches!(value, Err(Error::LuaError(msg)) if msg.contains("invalid argument")));
     assert_eq!(lua.top(), 0);
 }

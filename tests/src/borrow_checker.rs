@@ -148,7 +148,6 @@ fn test_callback_reentrancy() {
         assert_eq!(lua.top(), 0);
 
         let result = lua.do_string::<String>("return require('sys'):get_state()");
-        // panic!("{:?}", result);
         assert!(matches!(result, Ok(ref s) if s == "finished"));
         assert_eq!(lua.top(), 0);
     }

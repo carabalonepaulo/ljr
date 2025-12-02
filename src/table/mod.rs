@@ -173,6 +173,16 @@ where
     }
 
     #[inline]
+    pub fn insert(&mut self, index: i32, value: impl ToLua) {
+        self.with_mut(|t| t.insert(index, value));
+    }
+
+    #[inline]
+    pub fn remove<T: FromLua + ValueArg>(&mut self, index: i32) -> Option<T> {
+        self.with_mut(|t| t.remove(index))
+    }
+
+    #[inline]
     pub fn clear(&mut self) {
         self.with_mut(|t| t.clear());
     }
@@ -180,6 +190,15 @@ where
     #[inline]
     pub fn len(&self) -> usize {
         self.with(|t| t.len())
+    }
+
+    pub fn for_each<K, V, F>(&self, f: F)
+    where
+        K: FromLua,
+        V: FromLua,
+        F: FnMut(&K, &V) -> bool,
+    {
+        self.with(|t| t.for_each(f))
     }
 
     pub fn extend_from_slice<T: ToLua + Clone>(&mut self, src: &[T]) {
