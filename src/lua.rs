@@ -127,7 +127,7 @@ impl InnerLua {
         let target_vm_id = unsafe { crate::lua::get_vm_id(dest_ptr) };
 
         if self.vm_id != target_vm_id {
-            panic!("unsafe cross-vm operation: UserData belongs to a different Lua state")
+            panic!("unsafe cross-vm operation, value belongs to a different Lua state")
         }
 
         unsafe { sys::lua_rawgeti(dest_ptr, sys::LUA_REGISTRYINDEX, id as _) };

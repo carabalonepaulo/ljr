@@ -36,7 +36,7 @@ where
 {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
         unsafe { sys::lua_createtable(ptr, self.narr, self.nrec) };
-        let mut table = StackTable::borrowed(ptr, -1);
+        let mut table = StackTable::from_stack(ptr, -1);
         table.with_mut(self.builder);
     }
 
