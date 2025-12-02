@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use crate::{from_lua::FromLua, lua::ValueArg, sys, table::constraints::TableKey, to_lua::ToLua};
+use crate::{from_lua::FromLua, lua::ValueArg, sys, to_lua::ToLua};
 
 #[derive(Debug)]
 pub struct TableView<'t>(*mut sys::lua_State, i32, PhantomData<&'t ()>);
@@ -10,13 +10,13 @@ impl<'t> TableView<'t> {
         Self(ptr, idx, PhantomData)
     }
 
-    pub fn set<'a>(&mut self, key: impl TableKey<'a>, value: impl ToLua) {
+    pub fn set<'a>(&mut self, key: impl ToLua, value: impl ToLua) {
         key.to_lua(self.0);
         value.to_lua(self.0);
         unsafe { sys::lua_settable(self.0, self.1) };
     }
 
-    pub fn get<'a, T: FromLua + ValueArg>(&self, key: impl TableKey<'a>) -> Option<T> {
+    pub fn get<'a, T: FromLua + ValueArg>(&self, key: impl ToLua) -> Option<T> {
         key.to_lua(self.0);
         unsafe { sys::lua_gettable(self.0, self.1) };
         let val = <T as FromLua>::from_lua(self.0, -1);
@@ -24,11 +24,7 @@ impl<'t> TableView<'t> {
         val
     }
 
-    pub fn view<'a, T: FromLua, F: FnOnce(&T) -> R, R>(
-        &self,
-        key: impl TableKey<'a>,
-        f: F,
-    ) -> Option<R> {
+    pub fn view<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, key: impl ToLua, f: F) -> Option<R> {
         key.to_lua(self.0);
         unsafe { sys::lua_gettable(self.0, self.1) };
         let value = <T as FromLua>::from_lua(self.0, -1);
@@ -199,7 +195,7 @@ impl<'t> TableView<'t> {
         result
     }
 
-    pub fn contains_key<'a>(&self, key: impl TableKey<'a>) -> bool {
+    pub fn contains_key<'a>(&self, key: impl ToLua) -> bool {
         key.to_lua(self.0);
         unsafe { sys::lua_gettable(self.0, self.1) };
         let not_nil = unsafe { sys::lua_isnil(self.0, -1) == 0 };

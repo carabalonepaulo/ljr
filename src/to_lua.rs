@@ -3,7 +3,7 @@ use std::cell::RefCell;
 use crate::sys;
 use macros::generate_to_lua_tuple_impl;
 
-use crate::{Nil, UserData};
+use crate::UserData;
 
 pub unsafe trait ToLua {
     fn to_lua(self, ptr: *mut sys::lua_State);
@@ -13,21 +13,45 @@ pub unsafe trait ToLua {
     }
 }
 
+unsafe impl ToLua for &i32 {
+    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+        unsafe { sys::lua_pushinteger(ptr, (*self) as _) }
+    }
+}
+
 unsafe impl ToLua for i32 {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        unsafe { sys::lua_pushinteger(ptr, self as _) }
+        (&self).to_lua(ptr);
+    }
+}
+
+unsafe impl ToLua for &f32 {
+    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+        unsafe { sys::lua_pushnumber(ptr, (*self) as _) }
     }
 }
 
 unsafe impl ToLua for f32 {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        unsafe { sys::lua_pushnumber(ptr, self as _) }
+        (&self).to_lua(ptr);
+    }
+}
+
+unsafe impl ToLua for &f64 {
+    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+        unsafe { sys::lua_pushnumber(ptr, *self) }
     }
 }
 
 unsafe impl ToLua for f64 {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        unsafe { sys::lua_pushnumber(ptr, self) }
+        (&self).to_lua(ptr);
+    }
+}
+
+unsafe impl ToLua for &bool {
+    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+        unsafe { sys::lua_pushboolean(ptr, if *self { 1 } else { 0 }) }
     }
 }
 
@@ -43,15 +67,15 @@ unsafe impl ToLua for &str {
     }
 }
 
-unsafe impl ToLua for String {
+unsafe impl ToLua for &String {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
         self.as_str().to_lua(ptr)
     }
 }
 
-unsafe impl ToLua for Nil {
+unsafe impl ToLua for String {
     fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        unsafe { sys::lua_pushnil(ptr) }
+        (&self).to_lua(ptr);
     }
 }
 

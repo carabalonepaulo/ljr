@@ -12,12 +12,10 @@ use crate::{
     lua::{InnerLua, ValueArg},
     prelude::TableView,
     sys,
-    table::constraints::TableKey,
     to_lua::ToLua,
 };
 
 pub mod builder;
-pub mod constraints;
 pub mod view;
 
 pub trait TableStorage {
@@ -192,7 +190,7 @@ where
     }
 
     #[inline]
-    pub fn contains_key<'a>(&self, key: impl TableKey<'a>) -> bool {
+    pub fn contains_key<'a>(&self, key: impl ToLua) -> bool {
         self.with(|t| t.contains_key(key))
     }
 
@@ -225,7 +223,7 @@ where
         src.iter().for_each(|v| guard.push(v.clone()));
     }
 
-    pub fn extend_from_map<'a, K: TableKey<'a> + Clone, V: FromLua + ToLua + Clone>(
+    pub fn extend_from_map<'a, K: ToLua + Clone, V: FromLua + ToLua + Clone>(
         &mut self,
         src: &HashMap<K, V>,
     ) {
