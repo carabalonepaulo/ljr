@@ -108,6 +108,10 @@ impl<'t> TableView<'t> {
         unsafe { sys::lua_objlen(self.0, self.1) }
     }
 
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     pub fn insert(&mut self, index: i32, value: impl ToLua) {
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
 
@@ -137,22 +141,70 @@ impl<'t> TableView<'t> {
         }
 
         unsafe { sys::lua_rawgeti(self.0, self.1, index as _) };
-        let val = <T as FromLua>::from_lua(self.0, -1);
+        let value = <T as FromLua>::from_lua(self.0, -1);
         unsafe { sys::lua_pop(self.0, 1) };
 
-        for i in index..len {
+        if value.is_some() {
+            for i in index..len {
+                unsafe {
+                    sys::lua_rawgeti(self.0, self.1, (i + 1) as _);
+                    sys::lua_rawseti(self.0, self.1, i as _);
+                }
+            }
+
             unsafe {
-                sys::lua_rawgeti(self.0, self.1, (i + 1) as _);
-                sys::lua_rawseti(self.0, self.1, i as _);
+                sys::lua_pushnil(self.0);
+                sys::lua_rawseti(self.0, self.1, len as _);
             }
         }
 
-        unsafe {
-            sys::lua_pushnil(self.0);
-            sys::lua_rawseti(self.0, self.1, len as _);
+        value
+    }
+
+    pub fn remove_then<T: FromLua, F: FnOnce(&T) -> R, R>(
+        &mut self,
+        index: i32,
+        f: F,
+    ) -> Option<R> {
+        let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
+
+        if index < 1 || index > len {
+            return None;
         }
 
-        val
+        unsafe { sys::lua_rawgeti(self.0, self.1, index as _) };
+        let value = <T as FromLua>::from_lua(self.0, -1);
+        let result = if let Some(value) = value {
+            let result = f(&value);
+            Some(result)
+        } else {
+            None
+        };
+        unsafe { sys::lua_pop(self.0, 1) };
+
+        if result.is_some() {
+            for i in index..len {
+                unsafe {
+                    sys::lua_rawgeti(self.0, self.1, (i + 1) as _);
+                    sys::lua_rawseti(self.0, self.1, i as _);
+                }
+            }
+
+            unsafe {
+                sys::lua_pushnil(self.0);
+                sys::lua_rawseti(self.0, self.1, len as _);
+            }
+        }
+
+        result
+    }
+
+    pub fn contains_key<'a>(&self, key: impl TableKey<'a>) -> bool {
+        key.to_lua(self.0);
+        unsafe { sys::lua_gettable(self.0, self.1) };
+        let not_nil = unsafe { sys::lua_isnil(self.0, -1) == 0 };
+        unsafe { sys::lua_pop(self.0, 1) };
+        not_nil
     }
 
     pub fn for_each<K, V, F>(&self, mut f: F)

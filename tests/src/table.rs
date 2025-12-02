@@ -816,9 +816,9 @@ fn test_remove_returns_ud() {
     let mut table = lua
         .do_string::<TableRef>(
             r#"
-        local F = require 'factory'
-        return { F.new(100), F.new(200), F.new(300) }
-    "#,
+            local F = require 'factory'
+            return { F.new(100), F.new(200), F.new(300) }
+            "#,
         )
         .unwrap();
 
@@ -839,5 +839,130 @@ fn test_remove_returns_ud() {
     });
 
     assert_eq!(sum, 100 + 300);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_remove_then_borrowed_string() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, {
+        "primeiro",
+        "segundo",
+        "terceiro"
+    });
+
+    let length_of_removed = table.with_mut(|t| {
+        t.remove_then(2, |s: &StackStr| {
+            let str_slice = s.as_str().unwrap();
+            assert_eq!(str_slice, "segundo");
+            str_slice.len()
+        })
+    });
+
+    assert_eq!(length_of_removed, Some(7));
+    assert_eq!(table.len(), 2);
+
+    let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
+    assert_eq!(values, vec!["primeiro", "terceiro"]);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_remove_then_type_mismatch() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { 10, "texto", 30 });
+
+    let res = table.with_mut(|t| t.remove_then(2, |v: &i32| *v * 2));
+
+    assert_eq!(res, None);
+    assert_eq!(table.len(), 3);
+
+    let val_at_2: String = table.with(|t| t.get(2).unwrap());
+    assert_eq!(val_at_2, "texto");
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_remove_success_middle() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { 10, 20, 30 });
+
+    table.with_mut(|t| {
+        let val = t.remove::<i32>(2);
+        assert_eq!(val, Some(20));
+    });
+
+    let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
+    assert_eq!(values, vec![10, 30]);
+    assert_eq!(table.len(), 2);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_remove_success_last() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { "a", "b" });
+
+    table.with_mut(|t| {
+        let val = t.remove::<String>(2);
+        assert_eq!(val.as_deref(), Some("b"));
+    });
+
+    let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
+    assert_eq!(values, vec!["a"]);
+    assert_eq!(table.len(), 1);
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_remove_fail_type_mismatch_preserves_table() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, {
+        10,
+        "não sou um inteiro",
+        30
+    });
+
+    table.with_mut(|t| {
+        let val = t.remove::<i32>(2);
+        assert_eq!(val, None);
+    });
+
+    assert_eq!(table.len(), 3);
+
+    let v1: i32 = table.with(|t| t.get(1).unwrap());
+    let v2: String = table.with(|t| t.get(2).unwrap());
+    let v3: i32 = table.with(|t| t.get(3).unwrap());
+
+    assert_eq!(v1, 10);
+    assert_eq!(v2, "não sou um inteiro");
+    assert_eq!(v3, 30);
+
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
+fn test_remove_out_of_bounds() {
+    let lua = Lua::new();
+    lua.open_libs();
+
+    let mut table = create_table!(lua, { 1, 2, 3 });
+
+    table.with_mut(|t| {
+        assert_eq!(t.remove::<i32>(0), None);
+        assert_eq!(t.remove::<i32>(4), None);
+    });
+
+    assert_eq!(table.len(), 3);
     assert_eq!(lua.top(), 0);
 }

@@ -183,6 +183,20 @@ where
     }
 
     #[inline]
+    pub fn remove_then<T: FromLua, F: FnOnce(&T) -> R, R>(
+        &mut self,
+        index: i32,
+        f: F,
+    ) -> Option<R> {
+        self.with_mut(|t| t.remove_then(index, f))
+    }
+
+    #[inline]
+    pub fn contains_key<'a>(&self, key: impl TableKey<'a>) -> bool {
+        self.with(|t| t.contains_key(key))
+    }
+
+    #[inline]
     pub fn clear(&mut self) {
         self.with_mut(|t| t.clear());
     }
@@ -190,6 +204,11 @@ where
     #[inline]
     pub fn len(&self) -> usize {
         self.with(|t| t.len())
+    }
+
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.with(|t| t.is_empty())
     }
 
     pub fn for_each<K, V, F>(&self, f: F)
