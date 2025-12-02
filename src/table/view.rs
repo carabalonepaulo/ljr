@@ -1,4 +1,4 @@
-use std::marker::PhantomData;
+use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{from_lua::FromLua, lua::ValueArg, sys, to_lua::ToLua};
 
@@ -253,6 +253,17 @@ impl<'t> TableView<'t> {
             finished: false,
             marker: PhantomData,
         }
+    }
+
+    pub fn extend_from_slice<T: ToLua + Clone>(&mut self, src: &[T]) {
+        src.iter().for_each(|v| self.push(v.clone()));
+    }
+
+    pub fn extend_from_map<'a, K: ToLua + Clone, V: FromLua + ToLua + Clone>(
+        &mut self,
+        src: &HashMap<K, V>,
+    ) {
+        src.iter().for_each(|(k, v)| self.set(k.clone(), v.clone()));
     }
 }
 

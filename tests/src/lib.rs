@@ -469,7 +469,7 @@ fn test_create_table_with_macros() {
         true => "ulala",
     });
 
-    assert_eq!(table.len(), 7);
+    assert_eq!(table.with(|t| t.len()), 7);
 
     {
         let values: Vec<(String, String)> = table.with(|t| t.pairs::<String, String>().collect());
@@ -517,10 +517,10 @@ fn test_table_clear() {
         true,
         false
     });
-    assert_eq!(table.len(), 7);
     assert_eq!(table.with(|t| t.len()), 7);
-    table.clear();
-    assert_eq!(table.len(), 0);
+    assert_eq!(table.with(|t| t.len()), 7);
+    table.with_mut(|t| t.clear());
+    assert_eq!(table.with(|t| t.len()), 0);
     assert_eq!(lua.top(), 0);
 }
 
@@ -599,13 +599,13 @@ fn test_table_extend_from_slice() {
     lua.open_libs();
 
     let mut table = create_table!(lua, {});
-    assert_eq!(table.len(), 0);
+    assert_eq!(table.with(|t| t.len()), 0);
 
-    table.extend_from_slice(&[10, 20, 30]);
-    assert_eq!(table.len(), 3);
+    table.with_mut(|t| t.extend_from_slice(&[10, 20, 30]));
+    assert_eq!(table.with(|t| t.len()), 3);
 
-    table.clear();
-    assert_eq!(table.len(), 0);
+    table.with_mut(|t| t.clear());
+    assert_eq!(table.with(|t| t.len()), 0);
     assert_eq!(lua.top(), 0);
 }
 
@@ -621,7 +621,7 @@ fn test_table_extend_from_map() {
     map.insert("world".to_string(), true);
 
     let mut table = create_table!(lua, {});
-    table.extend_from_map(&map);
+    table.with_mut(|t| t.extend_from_map(&map));
 
     let mut values: Vec<(String, bool)> = table.with(|t| t.pairs::<String, bool>().collect());
     values.sort_unstable();

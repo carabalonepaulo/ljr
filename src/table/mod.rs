@@ -159,6 +159,27 @@ where
     pub fn with_mut<F: FnOnce(&mut TableView) -> R, R>(&mut self, f: F) -> R {
         self.state.with_mut(f)
     }
+}
+
+impl StackTable {
+    pub fn from_stack(ptr: *mut sys::lua_State, idx: i32) -> StackTable {
+        unsafe {
+            let idx = sys::lua_absindex(ptr, idx);
+            let table_ptr = sys::lua_topointer(ptr, idx);
+            Self {
+                state: BorrowedState {
+                    ptr,
+                    idx,
+                    table_ptr,
+                },
+            }
+        }
+    }
+
+    #[inline]
+    pub fn to_owned(&self) -> TableRef {
+        Table::<Owned>::from_stack(self.state.ptr, self.state.idx)
+    }
 
     #[inline]
     pub fn push(&mut self, value: impl ToLua) {
@@ -209,6 +230,7 @@ where
         self.with(|t| t.is_empty())
     }
 
+    #[inline]
     pub fn for_each<K, V, F>(&self, f: F)
     where
         K: FromLua,
@@ -218,38 +240,17 @@ where
         self.with(|t| t.for_each(f))
     }
 
+    #[inline]
     pub fn extend_from_slice<T: ToLua + Clone>(&mut self, src: &[T]) {
-        let mut guard = self.as_mut();
-        src.iter().for_each(|v| guard.push(v.clone()));
+        self.with_mut(|t| t.extend_from_slice(src))
     }
 
+    #[inline]
     pub fn extend_from_map<'a, K: ToLua + Clone, V: FromLua + ToLua + Clone>(
         &mut self,
         src: &HashMap<K, V>,
     ) {
-        let mut guard = self.as_mut();
-        src.iter()
-            .for_each(|(k, v)| guard.set(k.clone(), v.clone()));
-    }
-}
-
-impl StackTable {
-    pub fn from_stack(ptr: *mut sys::lua_State, idx: i32) -> StackTable {
-        unsafe {
-            let idx = sys::lua_absindex(ptr, idx);
-            let table_ptr = sys::lua_topointer(ptr, idx);
-            Self {
-                state: BorrowedState {
-                    ptr,
-                    idx,
-                    table_ptr,
-                },
-            }
-        }
-    }
-
-    pub fn to_owned(&self) -> TableRef {
-        Table::<Owned>::from_stack(self.state.ptr, self.state.idx)
+        self.with_mut(|t| t.extend_from_map(src))
     }
 }
 
@@ -412,5 +413,28 @@ impl<'t> DerefMut for GuardMut<'t> {
 impl<'t> Drop for GuardMut<'t> {
     fn drop(&mut self) {
         unsafe { sys::lua_settop(self.0, self.1) }
+    }
+}
+
+impl<'a, M, T> From<&'a Table<M>> for Vec<T>
+where
+    M: Mode + TableStorage,
+    M::State: TableAccess,
+    T: FromLua + ValueArg,
+{
+    fn from(value: &'a Table<M>) -> Self {
+        value.with(|t| t.ipairs::<T>().map(|(_, v)| v).collect())
+    }
+}
+
+impl<'a, M, K, V> From<&'a Table<M>> for HashMap<K, V>
+where
+    M: Mode + TableStorage,
+    M::State: TableAccess,
+    K: FromLua + ValueArg + Hash + Eq,
+    V: FromLua + ValueArg,
+{
+    fn from(value: &'a Table<M>) -> Self {
+        value.with(|t| t.pairs::<K, V>().collect())
     }
 }

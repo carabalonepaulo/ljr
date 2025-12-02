@@ -57,7 +57,7 @@ fn test_table_access_after_vm_close_panics_safely() {
     };
 
     expect_lua_panic(AssertUnwindSafe(|| {
-        let _ = table.len();
+        let _ = table.with(|t| t.len());
     }));
 }
 

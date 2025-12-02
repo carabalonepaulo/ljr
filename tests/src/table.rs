@@ -245,11 +245,11 @@ fn test_pop_with_preserves_stack_balance_on_error_simulation() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.extend_from_slice(&[1, 2, 3, 4, 5]);
+    table.with_mut(|t| t.extend_from_slice(&[1, 2, 3, 4, 5]));
 
     table.with_mut(|t| while let Some(_) = t.pop_then(|_: &i32| {}) {});
 
-    assert_eq!(table.len(), 0);
+    assert_eq!(table.with(|t| t.len()), 0);
     assert_eq!(lua.top(), 0);
 }
 
@@ -291,11 +291,11 @@ fn test_table_pop_with_userdata_side_effects() {
     table.with_mut(|t| {
         t.push(ud);
     });
-    assert_eq!(table.len(), 1);
+    assert_eq!(table.with(|t| t.len()), 1);
 
     let extracted_value = table.with_mut(|t| t.pop_then(|u: &StackUd<Counter>| u.as_ref().get()));
     assert_eq!(extracted_value, Some(42));
-    assert_eq!(table.len(), 0);
+    assert_eq!(table.with(|t| t.len()), 0);
     assert_eq!(lua.top(), 0);
 }
 
@@ -323,14 +323,14 @@ fn test_table_pop_with_primitive() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.extend_from_slice(&[10, 20, 30]);
-    assert_eq!(table.len(), 3);
+    table.with_mut(|t| t.extend_from_slice(&[10, 20, 30]));
+    assert_eq!(table.with(|t| t.len()), 3);
 
     table.with_mut(|t| {
         let was_thirty = t.pop_then(|val: &i32| *val == 30);
         assert_eq!(was_thirty, Some(true));
     });
-    assert_eq!(table.len(), 2);
+    assert_eq!(table.with(|t| t.len()), 2);
 
     table.with(|t| {
         let last = t.get::<i32>(3);
@@ -371,7 +371,7 @@ fn test_table_for_each_sum_primitive() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.extend_from_slice(&[10, 20, 30]);
+    table.with_mut(|t| t.extend_from_slice(&[10, 20, 30]));
 
     let mut sum = 0;
 
@@ -423,7 +423,7 @@ fn test_table_for_each_break_behavior() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.extend_from_slice(&[1, 2, 3, 4, 5]);
+    table.with_mut(|t| t.extend_from_slice(&[1, 2, 3, 4, 5]));
 
     let mut visited = 0;
 
@@ -520,7 +520,7 @@ fn test_pairs_iterator_break_leak() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.extend_from_slice(&[10, 20, 30, 40, 50]);
+    table.with_mut(|t| t.extend_from_slice(&[10, 20, 30, 40, 50]));
 
     assert_eq!(lua.top(), 0);
 
@@ -667,7 +667,7 @@ fn test_table_insert_basic() {
 
     let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
     assert_eq!(values, vec![10, 15, 20, 30]);
-    assert_eq!(table.len(), 4);
+    assert_eq!(table.with(|t| t.len()), 4);
     assert_eq!(lua.top(), 0);
 }
 
@@ -719,7 +719,7 @@ fn test_table_remove_basic() {
 
     let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
     assert_eq!(values, vec![10, 30, 40]);
-    assert_eq!(table.len(), 3);
+    assert_eq!(table.with(|t| t.len()), 3);
     assert_eq!(lua.top(), 0);
 }
 
@@ -758,7 +758,7 @@ fn test_table_remove_invalid_index() {
         assert_eq!(overflow, None);
     });
 
-    assert_eq!(table.len(), 2);
+    assert_eq!(table.with(|t| t.len()), 2);
     assert_eq!(lua.top(), 0);
 }
 
@@ -827,7 +827,7 @@ fn test_remove_returns_ud() {
         assert_eq!(ud.as_ref().get(), 200);
     });
 
-    assert_eq!(table.len(), 2);
+    assert_eq!(table.with(|t| t.len()), 2);
 
     let sum = table.with(|t| {
         let mut s = 0;
@@ -862,7 +862,7 @@ fn test_remove_then_borrowed_string() {
     });
 
     assert_eq!(length_of_removed, Some(7));
-    assert_eq!(table.len(), 2);
+    assert_eq!(table.with(|t| t.len()), 2);
 
     let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
     assert_eq!(values, vec!["primeiro", "terceiro"]);
@@ -879,7 +879,7 @@ fn test_remove_then_type_mismatch() {
     let res = table.with_mut(|t| t.remove_then(2, |v: &i32| *v * 2));
 
     assert_eq!(res, None);
-    assert_eq!(table.len(), 3);
+    assert_eq!(table.with(|t| t.len()), 3);
 
     let val_at_2: String = table.with(|t| t.get(2).unwrap());
     assert_eq!(val_at_2, "texto");
@@ -900,7 +900,7 @@ fn test_remove_success_middle() {
 
     let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
     assert_eq!(values, vec![10, 30]);
-    assert_eq!(table.len(), 2);
+    assert_eq!(table.with(|t| t.len()), 2);
     assert_eq!(lua.top(), 0);
 }
 
@@ -918,7 +918,7 @@ fn test_remove_success_last() {
 
     let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
     assert_eq!(values, vec!["a"]);
-    assert_eq!(table.len(), 1);
+    assert_eq!(table.with(|t| t.len()), 1);
     assert_eq!(lua.top(), 0);
 }
 
@@ -938,7 +938,7 @@ fn test_remove_fail_type_mismatch_preserves_table() {
         assert_eq!(val, None);
     });
 
-    assert_eq!(table.len(), 3);
+    assert_eq!(table.with(|t| t.len()), 3);
 
     let v1: i32 = table.with(|t| t.get(1).unwrap());
     let v2: String = table.with(|t| t.get(2).unwrap());
@@ -963,6 +963,6 @@ fn test_remove_out_of_bounds() {
         assert_eq!(t.remove::<i32>(4), None);
     });
 
-    assert_eq!(table.len(), 3);
+    assert_eq!(table.with(|t| t.len()), 3);
     assert_eq!(lua.top(), 0);
 }
