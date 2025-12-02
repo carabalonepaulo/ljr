@@ -6,7 +6,8 @@ use std::{
 };
 
 use crate::{
-    Borrowed, Mode, Owned, UserData, from_lua::FromLua, lua::InnerLua, sys, to_lua::ToLua,
+    Borrowed, Mode, Owned, UserData, from_lua::FromLua, is_type::IsType, lua::InnerLua, sys,
+    to_lua::ToLua,
 };
 
 pub type StackUd<T> = Ud<Borrowed, T>;
@@ -221,5 +222,15 @@ impl<M: Mode, T: UserData> Eq for Ud<M, T> {}
 impl<M: Mode, T: UserData> Hash for Ud<M, T> {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.internal_ptr().hash(state);
+    }
+}
+
+impl<M, T> IsType for Ud<M, T>
+where
+    M: Mode,
+    T: UserData,
+{
+    fn is_type(ptr: *mut crate::sys::lua_State, idx: i32) -> bool {
+        unsafe { sys::lua_isuserdata(ptr, idx) != 0 }
     }
 }

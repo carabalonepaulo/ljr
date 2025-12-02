@@ -689,7 +689,7 @@ fn test_table_insert_boundaries() {
 }
 
 #[test]
-fn test_table_insert_clamping() {
+fn test_table_insert_on_hash_side() {
     let lua = Lua::new();
     lua.open_libs();
 
@@ -701,7 +701,7 @@ fn test_table_insert_clamping() {
     });
 
     let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
-    assert_eq!(values, vec![0, 10, 20]);
+    assert_eq!(values, vec![10]);
     assert_eq!(lua.top(), 0);
 }
 

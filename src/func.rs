@@ -4,6 +4,7 @@ use crate::{
     Borrowed, Mode, Owned,
     error::Error,
     from_lua::FromLua,
+    is_type::IsType,
     lua::{InnerLua, ValueArg},
     sys,
     to_lua::ToLua,
@@ -220,5 +221,16 @@ where
                 Func::Owned(inner) => inner.0.push_ref(ptr, inner.1),
             }
         }
+    }
+}
+
+impl<M, I, O> IsType for Func<M, I, O>
+where
+    M: Mode,
+    I: FromLua + ToLua,
+    O: FromLua + ToLua,
+{
+    fn is_type(ptr: *mut crate::sys::lua_State, idx: i32) -> bool {
+        (unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TFUNCTION as i32)
     }
 }

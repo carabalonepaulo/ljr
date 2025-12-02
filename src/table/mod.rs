@@ -197,12 +197,12 @@ impl StackTable {
     }
 
     #[inline]
-    pub fn remove<T: FromLua + ValueArg>(&mut self, index: i32) -> Option<T> {
+    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Option<T> {
         self.with_mut(|t| t.remove(index))
     }
 
     #[inline]
-    pub fn remove_then<T: FromLua, F: FnOnce(&T) -> R, R>(
+    pub fn remove_then<T: FromLua + IsType, F: FnOnce(&T) -> R, R>(
         &mut self,
         index: i32,
         f: F,

@@ -1,6 +1,41 @@
 use std::{collections::HashMap, marker::PhantomData};
 
-use crate::{from_lua::FromLua, lua::ValueArg, sys, to_lua::ToLua};
+use crate::{from_lua::FromLua, is_type::IsType, lua::ValueArg, sys, to_lua::ToLua};
+
+const SHARED_REMOVE_KEY: usize = 0x6C6A72_01;
+const SHARED_INSERT_KEY: usize = 0x6C6A72_02;
+
+unsafe fn ensure_cached_func(
+    ptr: *mut sys::lua_State,
+    key: *mut std::ffi::c_void,
+    name: &std::ffi::CStr,
+) {
+    unsafe {
+        sys::lua_pushlightuserdata(ptr, key);
+        sys::lua_rawget(ptr, sys::LUA_REGISTRYINDEX);
+
+        if sys::lua_isfunction(ptr, -1) == 0 {
+            sys::lua_pop(ptr, 1);
+
+            sys::lua_getglobal(ptr, c"table".as_ptr());
+            if sys::lua_istable(ptr, -1) != 0 {
+                sys::lua_getfield(ptr, -1, name.as_ptr());
+                sys::lua_remove(ptr, -2);
+
+                if sys::lua_isfunction(ptr, -1) != 0 {
+                    sys::lua_pushlightuserdata(ptr, key);
+                    sys::lua_pushvalue(ptr, -2);
+                    sys::lua_rawset(ptr, sys::LUA_REGISTRYINDEX);
+                    return;
+                }
+                sys::lua_pop(ptr, 1);
+            } else {
+                sys::lua_pop(ptr, 1);
+            }
+            sys::lua_pushnil(ptr);
+        }
+    }
+}
 
 #[derive(Debug)]
 pub struct TableView<'t>(*mut sys::lua_State, i32, PhantomData<&'t ()>);
@@ -109,90 +144,88 @@ impl<'t> TableView<'t> {
     }
 
     pub fn insert(&mut self, index: i32, value: impl ToLua) {
-        let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
+        unsafe {
+            let ptr = self.0;
+            let t_idx = self.1;
+            let key_addr = SHARED_INSERT_KEY as *mut std::ffi::c_void;
 
-        let effective_idx = if index < 1 { 1 } else { index };
-        let effective_idx = if effective_idx > len + 1 {
-            len + 1
-        } else {
-            effective_idx
-        };
+            ensure_cached_func(ptr, key_addr, c"insert");
 
-        for i in (effective_idx..=len).rev() {
-            unsafe {
-                sys::lua_rawgeti(self.0, self.1, i as _);
-                sys::lua_rawseti(self.0, self.1, (i + 1) as _);
+            sys::lua_pushvalue(ptr, t_idx);
+            sys::lua_pushinteger(ptr, index as _);
+            value.to_lua(ptr);
+
+            if sys::lua_pcall(ptr, 3, 0, 0) != 0 {
+                sys::lua_pop(ptr, 1);
             }
         }
-
-        value.to_lua(self.0);
-        unsafe { sys::lua_rawseti(self.0, self.1, effective_idx as _) };
     }
 
-    pub fn remove<T: FromLua + ValueArg>(&mut self, index: i32) -> Option<T> {
-        let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
-
-        if index < 1 || index > len {
-            return None;
-        }
-
-        unsafe { sys::lua_rawgeti(self.0, self.1, index as _) };
-        let value = <T as FromLua>::from_lua(self.0, -1);
-        unsafe { sys::lua_pop(self.0, 1) };
-
-        if value.is_some() {
-            for i in index..len {
-                unsafe {
-                    sys::lua_rawgeti(self.0, self.1, (i + 1) as _);
-                    sys::lua_rawseti(self.0, self.1, i as _);
-                }
-            }
-
-            unsafe {
-                sys::lua_pushnil(self.0);
-                sys::lua_rawseti(self.0, self.1, len as _);
-            }
-        }
-
-        value
-    }
-
-    pub fn remove_then<T: FromLua, F: FnOnce(&T) -> R, R>(
+    pub fn remove_then<T: FromLua + IsType, F: FnOnce(&T) -> R, R>(
         &mut self,
         index: i32,
         f: F,
     ) -> Option<R> {
-        let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
+        unsafe {
+            let ptr = self.0;
+            let t_idx = self.1;
+            let key_addr = SHARED_REMOVE_KEY as *mut std::ffi::c_void;
 
-        if index < 1 || index > len {
-            return None;
-        }
+            sys::lua_rawgeti(ptr, t_idx, index as _);
+            if !<T as IsType>::is_type(ptr, -1) {
+                sys::lua_pop(ptr, 1);
+                return None;
+            }
+            sys::lua_pop(ptr, 1);
 
-        unsafe { sys::lua_rawgeti(self.0, self.1, index as _) };
-        let value = <T as FromLua>::from_lua(self.0, -1);
-        let result = if let Some(value) = value {
-            let result = f(&value);
-            Some(result)
-        } else {
-            None
-        };
-        unsafe { sys::lua_pop(self.0, 1) };
+            ensure_cached_func(ptr, key_addr, c"remove");
 
-        if result.is_some() {
-            for i in index..len {
-                unsafe {
-                    sys::lua_rawgeti(self.0, self.1, (i + 1) as _);
-                    sys::lua_rawseti(self.0, self.1, i as _);
-                }
+            sys::lua_pushvalue(ptr, t_idx);
+            sys::lua_pushinteger(ptr, index as _);
+
+            if sys::lua_pcall(ptr, 2, 1, 0) != 0 {
+                sys::lua_pop(ptr, 1);
+                return None;
             }
 
-            unsafe {
-                sys::lua_pushnil(self.0);
-                sys::lua_rawseti(self.0, self.1, len as _);
-            }
+            let value = <T as FromLua>::from_lua(ptr, -1);
+            let result = if let Some(value) = value {
+                Some(f(&value))
+            } else {
+                None
+            };
+            sys::lua_pop(ptr, 1);
+            result
         }
+    }
 
-        result
+    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Option<T> {
+        unsafe {
+            let ptr = self.0;
+            let t_idx = self.1;
+            let key_addr = SHARED_REMOVE_KEY as *mut std::ffi::c_void;
+
+            sys::lua_rawgeti(ptr, t_idx, index as _);
+            if !<T as IsType>::is_type(ptr, -1) {
+                sys::lua_pop(ptr, 1);
+                return None;
+            }
+            sys::lua_pop(ptr, 1);
+
+            ensure_cached_func(ptr, key_addr, c"remove");
+
+            sys::lua_pushvalue(ptr, t_idx);
+            sys::lua_pushinteger(ptr, index as _);
+
+            if sys::lua_pcall(ptr, 2, 1, 0) != 0 {
+                sys::lua_pop(ptr, 1);
+                return None;
+            }
+
+            let val = <T as FromLua>::from_lua(ptr, -1);
+            sys::lua_pop(ptr, 1);
+            val
+        }
     }
 
     pub fn contains_key<'a>(&self, key: impl ToLua) -> bool {

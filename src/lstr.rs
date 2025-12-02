@@ -1,6 +1,8 @@
 use std::{marker::PhantomData, rc::Rc};
 
-use crate::{Borrowed, Mode, Owned, from_lua::FromLua, lua::InnerLua, sys, to_lua::ToLua};
+use crate::{
+    Borrowed, Mode, Owned, from_lua::FromLua, is_type::IsType, lua::InnerLua, sys, to_lua::ToLua,
+};
 
 pub type StackStr = LStr<Borrowed>;
 
@@ -145,5 +147,14 @@ where
                 LStr::Owned(inner, _) => inner.0.push_ref(ptr, inner.1),
             }
         }
+    }
+}
+
+impl<M> IsType for LStr<M>
+where
+    M: Mode,
+{
+    fn is_type(ptr: *mut crate::sys::lua_State, idx: i32) -> bool {
+        (unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32)
     }
 }
