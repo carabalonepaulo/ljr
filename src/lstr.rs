@@ -299,7 +299,7 @@ fn slice_from_stack(ptr: *mut sys::lua_State, idx: i32) -> &'static [u8] {
 impl crate::owned_value::private::Sealed for StrRef {}
 
 impl OwnedValue for StrRef {
-    fn inner_lua(&self) -> LuaInnerHandle<'_> {
+    fn handle(&self) -> LuaInnerHandle<'_> {
         LuaInnerHandle(&self.state.inner.lua)
     }
 }

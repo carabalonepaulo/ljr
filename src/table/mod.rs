@@ -452,7 +452,7 @@ where
 impl crate::owned_value::private::Sealed for TableRef {}
 
 impl OwnedValue for TableRef {
-    fn inner_lua(&self) -> LuaInnerHandle<'_> {
+    fn handle(&self) -> LuaInnerHandle<'_> {
         LuaInnerHandle(&self.state.inner.lua)
     }
 }
