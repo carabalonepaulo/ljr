@@ -227,20 +227,14 @@ impl Lua {
     }
 
     pub unsafe fn assert_main_state(&self) -> Result<(), Error> {
-        unsafe {
-            let ptr = self.state();
-            let cache_key = &CTX_KEY as *const u8 as *mut std::ffi::c_void;
-            sys::lua_pushlightuserdata(ptr, cache_key);
-            sys::lua_gettable(ptr, sys::LUA_REGISTRYINDEX);
+        let ptr = self.state();
+        let is_main = unsafe { sys::lua_pushthread(ptr) == 1 };
+        unsafe { sys::lua_pop(ptr, 1) };
 
-            let data_ptr = sys::lua_touserdata(ptr, -1);
-            sys::lua_pop(ptr, 1);
-
-            if data_ptr.is_null() {
-                Err(Error::MainStateNotAvailable)
-            } else {
-                Ok(())
-            }
+        if is_main {
+            Ok(())
+        } else {
+            Err(Error::MainStateNotAvailable)
         }
     }
 
