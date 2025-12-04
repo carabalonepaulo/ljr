@@ -40,7 +40,7 @@ pub struct InnerLua {
     vm_id: *const std::ffi::c_void,
 }
 
-pub(crate) unsafe fn get_vm_id(ptr: *mut sys::lua_State) -> *const std::ffi::c_void {
+unsafe fn get_vm_id(ptr: *mut sys::lua_State) -> *const std::ffi::c_void {
     unsafe {
         sys::lua_pushvalue(ptr, sys::LUA_REGISTRYINDEX);
         let id = sys::lua_topointer(ptr, -1);
