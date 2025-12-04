@@ -1,13 +1,6 @@
 use macros::generate_value_arg_tuple_impl;
 
-use crate::{
-    Borrowed,
-    func::FnRef,
-    lstr::StrRef,
-    sys,
-    table::TableRef,
-    ud::{Ud, UdRef},
-};
+use crate::{Borrowed, func::FnRef, lstr::StrRef, sys, table::TableRef, ud::UdRef};
 use std::{cell::Cell, ffi::CString, fmt::Display, ptr, rc::Rc};
 
 use crate::{
@@ -41,15 +34,16 @@ pub struct InnerLua {
 }
 
 unsafe fn get_vm_id(ptr: *mut sys::lua_State) -> *const std::ffi::c_void {
-    unsafe {
-        sys::lua_pushvalue(ptr, sys::LUA_REGISTRYINDEX);
-        let id = sys::lua_topointer(ptr, -1);
-        sys::lua_pop(ptr, 1);
-        id
-    }
+    unsafe { sys::lua_topointer(ptr, sys::LUA_REGISTRYINDEX) }
 }
 
 impl InnerLua {
+    pub(crate) fn ensure_context_raw(a: *mut sys::lua_State, b: *mut sys::lua_State) {
+        if unsafe { get_vm_id(a) != get_vm_id(b) } {
+            panic!("cannot interact with values from a different lua state")
+        }
+    }
+
     pub(crate) fn assert_context(&self, other: &InnerLua) -> Result<(), Error> {
         if self.vm_id == other.vm_id {
             Ok(())
@@ -271,9 +265,9 @@ impl Lua {
     pub fn create_ref<T: UserData>(&self, value: T) -> UdRef<T> {
         let ptr = self.state();
         <T as ToLua>::to_lua(value, ptr);
-        let ud = Ud::owned(self.inner.clone(), -1);
+        let value = <UdRef<T> as FromLua>::from_lua(ptr, -1).unwrap();
         unsafe { sys::lua_pop(ptr, 1) };
-        ud
+        value
     }
 
     pub fn create_str(&self, value: &str) -> StrRef {

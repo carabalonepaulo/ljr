@@ -27,7 +27,7 @@ fn test_reentrancy() {
             va + vb
         }
 
-        fn pass_ref(mut a: UdRef<Test>, b: UdRef<Test>) -> i32 {
+        fn pass_ref(a: UdRef<Test>, b: UdRef<Test>) -> i32 {
             let va = { (&mut *a.as_mut()).value };
             let vb = { (&*b.as_ref()).value };
             va + vb
