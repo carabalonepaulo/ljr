@@ -7,6 +7,7 @@ use std::{
 
 use crate::{
     Borrowed, Mode, Owned,
+    error::Error,
     from_lua::FromLua,
     is_type::IsType,
     lua::{InnerLua, ValueArg},
@@ -197,7 +198,7 @@ impl StackTable {
     }
 
     #[inline]
-    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Option<T> {
+    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Result<T, Error> {
         self.with_mut(|t| t.remove(index))
     }
 
@@ -206,7 +207,7 @@ impl StackTable {
         &mut self,
         index: i32,
         f: F,
-    ) -> Option<R> {
+    ) -> Result<R, Error> {
         self.with_mut(|t| t.remove_then(index, f))
     }
 

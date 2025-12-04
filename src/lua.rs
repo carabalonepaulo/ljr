@@ -276,13 +276,7 @@ impl Lua {
         }
 
         if unsafe { sys::lua_pcall(ptr, 0, <T as FromLua>::len(), 0) } != 0 {
-            if let Some(msg) = <String as FromLua>::from_lua(ptr, -1) {
-                unsafe { sys::lua_pop(ptr, 1) };
-                return Err(Error::LuaError(msg));
-            } else {
-                unsafe { sys::lua_pop(ptr, 1) };
-                return Err(Error::UnknownLuaError);
-            }
+            unsafe { Err(Error::from_stack(ptr, -1)) }
         } else {
             let size = <T as FromLua>::len();
             let value = T::from_lua(ptr, -size).ok_or(Error::WrongReturnType)?;

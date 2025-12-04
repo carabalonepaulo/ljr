@@ -714,7 +714,7 @@ fn test_table_remove_basic() {
 
     table.with_mut(|t| {
         let removed = t.remove::<i32>(2);
-        assert_eq!(removed, Some(20));
+        assert_eq!(removed, Ok(20));
     });
 
     let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
@@ -732,10 +732,10 @@ fn test_table_remove_boundaries() {
 
     table.with_mut(|t| {
         let first = t.remove::<String>(1);
-        assert_eq!(first.as_deref(), Some("a"));
+        assert_eq!(first.as_deref(), Ok("a"));
 
         let last = t.remove::<String>(2);
-        assert_eq!(last.as_deref(), Some("c"));
+        assert_eq!(last.as_deref(), Ok("c"));
     });
 
     let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
@@ -752,10 +752,10 @@ fn test_table_remove_invalid_index() {
 
     table.with_mut(|t| {
         let zero = t.remove::<i32>(0);
-        assert_eq!(zero, None);
+        assert!(matches!(zero, Err(Error::WrongReturnType)));
 
         let overflow = t.remove::<i32>(3);
-        assert_eq!(overflow, None);
+        assert!(matches!(overflow, Err(Error::WrongReturnType)));
     });
 
     assert_eq!(table.with(|t| t.len()), 2);
@@ -777,10 +777,10 @@ fn test_table_insert_remove_integration() {
         assert_eq!(t.len(), 3);
 
         let v1 = t.remove::<i32>(1);
-        assert_eq!(v1, Some(30));
+        assert_eq!(v1, Ok(30));
 
         let v2 = t.remove::<i32>(2);
-        assert_eq!(v2, Some(10));
+        assert_eq!(v2, Ok(10));
     });
 
     let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
@@ -861,7 +861,7 @@ fn test_remove_then_borrowed_string() {
         })
     });
 
-    assert_eq!(length_of_removed, Some(7));
+    assert_eq!(length_of_removed, Ok(7));
     assert_eq!(table.with(|t| t.len()), 2);
 
     let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
@@ -878,7 +878,7 @@ fn test_remove_then_type_mismatch() {
 
     let res = table.with_mut(|t| t.remove_then(2, |v: &i32| *v * 2));
 
-    assert_eq!(res, None);
+    assert!(matches!(res, Err(Error::WrongReturnType)));
     assert_eq!(table.with(|t| t.len()), 3);
 
     let val_at_2: String = table.with(|t| t.get(2).unwrap());
@@ -895,7 +895,7 @@ fn test_remove_success_middle() {
 
     table.with_mut(|t| {
         let val = t.remove::<i32>(2);
-        assert_eq!(val, Some(20));
+        assert_eq!(val, Ok(20));
     });
 
     let values: Vec<i32> = table.with(|t| t.ipairs::<i32>().map(|(_, v)| v).collect());
@@ -913,7 +913,7 @@ fn test_remove_success_last() {
 
     table.with_mut(|t| {
         let val = t.remove::<String>(2);
-        assert_eq!(val.as_deref(), Some("b"));
+        assert_eq!(val.as_deref(), Ok("b"));
     });
 
     let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());
@@ -935,7 +935,7 @@ fn test_remove_fail_type_mismatch_preserves_table() {
 
     table.with_mut(|t| {
         let val = t.remove::<i32>(2);
-        assert_eq!(val, None);
+        assert!(matches!(val, Err(Error::WrongReturnType)));
     });
 
     assert_eq!(table.with(|t| t.len()), 3);
@@ -959,8 +959,8 @@ fn test_remove_out_of_bounds() {
     let mut table = create_table!(lua, { 1, 2, 3 });
 
     table.with_mut(|t| {
-        assert_eq!(t.remove::<i32>(0), None);
-        assert_eq!(t.remove::<i32>(4), None);
+        assert!(matches!(t.remove::<i32>(0), Err(Error::WrongReturnType)));
+        assert!(matches!(t.remove::<i32>(4), Err(Error::WrongReturnType)));
     });
 
     assert_eq!(table.with(|t| t.len()), 3);

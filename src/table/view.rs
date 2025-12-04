@@ -1,6 +1,8 @@
 use std::{collections::HashMap, marker::PhantomData};
 
-use crate::{from_lua::FromLua, is_type::IsType, lua::ValueArg, sys, to_lua::ToLua};
+use crate::{
+    Nil, error::Error, from_lua::FromLua, is_type::IsType, lua::ValueArg, sys, to_lua::ToLua,
+};
 
 const SHARED_REMOVE_KEY: usize = 0x6C6A72_01;
 const SHARED_INSERT_KEY: usize = 0x6C6A72_02;
@@ -144,6 +146,11 @@ impl<'t> TableView<'t> {
     }
 
     pub fn insert(&mut self, index: i32, value: impl ToLua) {
+        self.try_insert(index, value)
+            .unwrap_or_else(|e| panic!("{}", e))
+    }
+
+    pub fn try_insert(&mut self, index: i32, value: impl ToLua) -> Result<(), Error> {
         unsafe {
             let ptr = self.0;
             let t_idx = self.1;
@@ -151,12 +158,21 @@ impl<'t> TableView<'t> {
 
             ensure_cached_func(ptr, key_addr, c"insert");
 
+            if Nil::is_type(self.0, -1) {
+                sys::lua_pop(self.0, 1);
+                return Err(Error::MissingGlobal("table.insert".into()));
+            }
+
             sys::lua_pushvalue(ptr, t_idx);
             sys::lua_pushinteger(ptr, index as _);
             value.to_lua(ptr);
 
             if sys::lua_pcall(ptr, 3, 0, 0) != 0 {
+                let err = Error::from_stack(ptr, -1);
                 sys::lua_pop(ptr, 1);
+                Err(err)
+            } else {
+                Ok(())
             }
         }
     }
@@ -165,66 +181,60 @@ impl<'t> TableView<'t> {
         &mut self,
         index: i32,
         f: F,
-    ) -> Option<R> {
+    ) -> Result<R, Error> {
         unsafe {
-            let ptr = self.0;
-            let t_idx = self.1;
-            let key_addr = SHARED_REMOVE_KEY as *mut std::ffi::c_void;
+            self.remove_impl::<T>(index)?;
 
-            sys::lua_rawgeti(ptr, t_idx, index as _);
-            if !<T as IsType>::is_type(ptr, -1) {
-                sys::lua_pop(ptr, 1);
-                return None;
-            }
-            sys::lua_pop(ptr, 1);
-
-            ensure_cached_func(ptr, key_addr, c"remove");
-
-            sys::lua_pushvalue(ptr, t_idx);
-            sys::lua_pushinteger(ptr, index as _);
-
-            if sys::lua_pcall(ptr, 2, 1, 0) != 0 {
-                sys::lua_pop(ptr, 1);
-                return None;
-            }
-
-            let value = <T as FromLua>::from_lua(ptr, -1);
+            let value = <T as FromLua>::from_lua(self.0, -1);
             let result = if let Some(value) = value {
                 Some(f(&value))
             } else {
                 None
             };
-            sys::lua_pop(ptr, 1);
-            result
+
+            sys::lua_pop(self.0, 1);
+            result.ok_or_else(|| Error::WrongReturnType)
         }
     }
 
-    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Option<T> {
+    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Result<T, Error> {
         unsafe {
-            let ptr = self.0;
-            let t_idx = self.1;
+            self.remove_impl::<T>(index)?;
+
+            let val = <T as FromLua>::from_lua(self.0, -1);
+            sys::lua_pop(self.0, 1);
+            val.ok_or_else(|| Error::WrongReturnType)
+        }
+    }
+
+    unsafe fn remove_impl<T: IsType>(&self, idx: i32) -> Result<(), Error> {
+        unsafe {
             let key_addr = SHARED_REMOVE_KEY as *mut std::ffi::c_void;
 
-            sys::lua_rawgeti(ptr, t_idx, index as _);
-            if !<T as IsType>::is_type(ptr, -1) {
-                sys::lua_pop(ptr, 1);
-                return None;
+            sys::lua_rawgeti(self.0, self.1, idx as _);
+            if !<T as IsType>::is_type(self.0, -1) {
+                sys::lua_pop(self.0, 1);
+                return Err(Error::WrongReturnType);
             }
-            sys::lua_pop(ptr, 1);
+            sys::lua_pop(self.0, 1);
 
-            ensure_cached_func(ptr, key_addr, c"remove");
+            ensure_cached_func(self.0, key_addr, c"remove");
 
-            sys::lua_pushvalue(ptr, t_idx);
-            sys::lua_pushinteger(ptr, index as _);
-
-            if sys::lua_pcall(ptr, 2, 1, 0) != 0 {
-                sys::lua_pop(ptr, 1);
-                return None;
+            if Nil::is_type(self.0, -1) {
+                sys::lua_pop(self.0, 1);
+                return Err(Error::MissingGlobal("table.remove".into()));
             }
 
-            let val = <T as FromLua>::from_lua(ptr, -1);
-            sys::lua_pop(ptr, 1);
-            val
+            sys::lua_pushvalue(self.0, self.1);
+            sys::lua_pushinteger(self.0, idx as _);
+
+            if sys::lua_pcall(self.0, 2, 1, 0) != 0 {
+                let err = Error::from_stack(self.0, -1);
+                sys::lua_pop(self.0, 1);
+                Err(err)
+            } else {
+                Ok(())
+            }
         }
     }
 
