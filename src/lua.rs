@@ -148,17 +148,6 @@ impl InnerLua {
         }
     }
 
-    pub(crate) unsafe fn push_ref(&self, dest_ptr: *mut sys::lua_State, id: i32) {
-        let _ = self.state();
-        let target_vm_id = unsafe { crate::lua::get_vm_id(dest_ptr) };
-
-        if self.vm_id != target_vm_id {
-            panic!("unsafe cross-vm operation, value belongs to a different Lua state")
-        }
-
-        unsafe { sys::lua_rawgeti(dest_ptr, sys::LUA_REGISTRYINDEX, id as _) };
-    }
-
     pub(crate) fn state(&self) -> *mut sys::lua_State {
         let ptr = self.state.get();
         if ptr.is_null() {

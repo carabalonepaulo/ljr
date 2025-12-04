@@ -5,7 +5,6 @@ pub mod lua;
 
 pub mod func;
 pub mod lstr;
-// mod new_ud;
 pub mod table;
 pub mod ud;
 
