@@ -14,6 +14,8 @@ pub mod to_lua;
 pub use macros::*;
 pub use mlua_sys as sys;
 
+mod owned_value;
+
 pub struct AnyUserData;
 
 pub struct AnyLuaFunction;
@@ -38,6 +40,7 @@ pub mod prelude {
     pub use crate::func::{FnRef, StackFn};
     pub use crate::lstr::{StackStr, StrRef};
     pub use crate::lua::Lua;
+    pub use crate::owned_value::OwnedValue;
     pub use crate::table::{StackTable, TableRef, builder::TableBuilder, view::TableView};
     pub use crate::ud::{StackUd, UdRef};
     pub use macros::{module, user_data};

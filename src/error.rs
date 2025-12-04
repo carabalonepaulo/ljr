@@ -1,4 +1,7 @@
-use std::ffi::NulError;
+use std::{
+    cell::{BorrowError, BorrowMutError},
+    ffi::NulError,
+};
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum Error {
@@ -16,6 +19,14 @@ pub enum Error {
     WrongReturnType,
     #[error("missing global: {0}")]
     MissingGlobal(String),
+    #[error("cannot interact with values from a different lua state")]
+    ContextMismatch,
+    #[error("cannot modify value state: it is currently borrowed/in use")]
+    ValueLocked,
+    #[error(
+        "main lua state is not available (library initialized inside a coroutine without explicit anchoring)"
+    )]
+    MainStateNotAvailable,
 }
 
 impl From<NulError> for Error {
@@ -33,5 +44,17 @@ impl Error {
             unsafe { crate::sys::lua_pop(ptr, 1) };
             return Error::UnknownLuaError;
         }
+    }
+}
+
+impl From<BorrowError> for Error {
+    fn from(_: BorrowError) -> Self {
+        Self::ValueLocked
+    }
+}
+
+impl From<BorrowMutError> for Error {
+    fn from(_: BorrowMutError) -> Self {
+        Self::ValueLocked
     }
 }

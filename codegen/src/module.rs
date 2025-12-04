@@ -1,7 +1,7 @@
 use proc_macro2::TokenStream;
 use quote::quote;
 
-pub fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
+pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
     let result = venial::parse_item(item).unwrap();
     let func = match result {
         venial::Item::Function(f) => f,
@@ -26,6 +26,27 @@ pub fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
         }
     };
 
+    let must_ensure_main = attr.to_string().contains("ensure_main_state");
+    let ensure_main_state = if must_ensure_main {
+        quote! {
+            if let Err(e) = unsafe { lua.assert_main_state() } {
+                let err_msg = e.to_string();
+                let c_msg = ::std::ffi::CString::new(err_msg).unwrap_or_default();
+
+                std::mem::drop(e);
+                std::mem::drop(lua);
+
+                unsafe {
+                    ljr::sys::lua_pushstring(ptr, c_msg.as_ptr());
+                    std::mem::drop(c_msg);
+                    ljr::sys::lua_error(ptr);
+                }
+            }
+        }
+    } else {
+        quote!()
+    };
+
     let expanded = quote! {
         #func
 
@@ -34,6 +55,7 @@ pub fn module(_attr: TokenStream, item: TokenStream) -> TokenStream {
             -> ::std::os::raw::c_int
         {
             let mut lua = ljr::lua::Lua::from_ptr(ptr);
+            #ensure_main_state
             #impl_body
         }
     };

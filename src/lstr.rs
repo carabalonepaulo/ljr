@@ -1,10 +1,17 @@
 use std::{
+    cell::RefCell,
     hash::{Hash, Hasher},
     rc::Rc,
 };
 
 use crate::{
-    Borrowed, Mode, Owned, from_lua::FromLua, is_type::IsType, lua::InnerLua, sys, to_lua::ToLua,
+    Borrowed, Mode, Owned,
+    from_lua::FromLua,
+    is_type::IsType,
+    lua::InnerLua,
+    owned_value::{LuaInnerHandle, OwnedValue},
+    sys,
+    to_lua::ToLua,
 };
 
 pub trait StringState {
@@ -37,13 +44,13 @@ impl StringAccess for BorrowedState {
 
 #[derive(Debug)]
 pub struct OwnedInner {
-    lua: Rc<InnerLua>,
+    lua: RefCell<Rc<InnerLua>>,
     id: i32,
 }
 
 impl Drop for OwnedInner {
     fn drop(&mut self) {
-        if let Some(ptr) = self.lua.try_state() {
+        if let Some(ptr) = self.lua.borrow().try_state() {
             unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
         }
     }
@@ -61,7 +68,7 @@ impl StringState for Owned {
 
 impl StringAccess for OwnedState {
     fn as_slice<'a>(&'a self) -> &'a [u8] {
-        let _ = self.inner.lua.state();
+        let _ = self.inner.lua.borrow().state();
         self.slice
     }
 }
@@ -111,6 +118,7 @@ impl StrRef {
         value.to_lua(ptr);
         let slice = slice_from_stack(ptr, -1);
         let id = unsafe { sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX) };
+        let lua = RefCell::new(lua);
         let inner = Rc::new(OwnedInner { lua, id });
         Self {
             state: OwnedState { inner, slice },
@@ -119,7 +127,7 @@ impl StrRef {
 
     pub fn from_stack(ptr: *mut sys::lua_State, idx: i32) -> StrRef {
         unsafe {
-            let lua = InnerLua::from_ptr(ptr);
+            let lua = RefCell::new(InnerLua::from_ptr(ptr));
             sys::lua_pushvalue(ptr, idx);
             let slice = slice_from_stack(ptr, -1);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
@@ -286,4 +294,12 @@ fn slice_from_stack(ptr: *mut sys::lua_State, idx: i32) -> &'static [u8] {
     let str_ptr = unsafe { sys::lua_tolstring(ptr, idx, &mut len) };
     let slice = unsafe { std::slice::from_raw_parts(str_ptr as *const u8, len) };
     slice
+}
+
+impl crate::owned_value::private::Sealed for StrRef {}
+
+impl OwnedValue for StrRef {
+    fn inner_lua(&self) -> LuaInnerHandle<'_> {
+        LuaInnerHandle(&self.state.inner.lua)
+    }
 }

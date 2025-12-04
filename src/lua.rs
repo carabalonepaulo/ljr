@@ -50,6 +50,14 @@ pub(crate) unsafe fn get_vm_id(ptr: *mut sys::lua_State) -> *const std::ffi::c_v
 }
 
 impl InnerLua {
+    pub(crate) fn assert_context(&self, other: &InnerLua) -> Result<(), Error> {
+        if self.vm_id == other.vm_id {
+            Ok(())
+        } else {
+            Err(Error::ContextMismatch)
+        }
+    }
+
     unsafe fn create_and_cache_sentinel(
         ptr: *mut sys::lua_State,
         key: *mut std::ffi::c_void,
@@ -70,6 +78,30 @@ impl InnerLua {
             sys::lua_setmetatable(ptr, -2);
 
             sys::lua_settable(ptr, sys::LUA_REGISTRYINDEX);
+        }
+    }
+
+    pub unsafe fn try_main_state(&self) -> Result<Rc<InnerLua>, Error> {
+        unsafe {
+            let ptr = self.state();
+            let cache_key = &CTX_KEY as *const u8 as *mut std::ffi::c_void;
+            sys::lua_pushlightuserdata(ptr, cache_key);
+            sys::lua_gettable(ptr, sys::LUA_REGISTRYINDEX);
+
+            let data_ptr = sys::lua_touserdata(ptr, -1);
+            sys::lua_pop(ptr, 1);
+
+            if data_ptr.is_null() {
+                return Err(Error::MainStateNotAvailable);
+            }
+
+            let weak_ptr = data_ptr as *mut std::rc::Weak<InnerLua>;
+            let weak = &*weak_ptr;
+
+            match weak.upgrade() {
+                Some(rc) => Ok(rc),
+                None => Err(Error::MainStateNotAvailable),
+            }
         }
     }
 
@@ -168,6 +200,12 @@ impl Drop for InnerLua {
     }
 }
 
+impl PartialEq for InnerLua {
+    fn eq(&self, other: &Self) -> bool {
+        self.cache_key == other.cache_key
+    }
+}
+
 #[derive(Debug)]
 pub struct Lua {
     inner: Rc<InnerLua>,
@@ -192,6 +230,24 @@ impl Lua {
         unsafe { InnerLua::create_and_cache_sentinel(ptr, cache_key, inner.clone()) };
 
         Self { inner }
+    }
+
+    pub unsafe fn assert_main_state(&self) -> Result<(), Error> {
+        unsafe {
+            let ptr = self.state();
+            let cache_key = &CTX_KEY as *const u8 as *mut std::ffi::c_void;
+            sys::lua_pushlightuserdata(ptr, cache_key);
+            sys::lua_gettable(ptr, sys::LUA_REGISTRYINDEX);
+
+            let data_ptr = sys::lua_touserdata(ptr, -1);
+            sys::lua_pop(ptr, 1);
+
+            if data_ptr.is_null() {
+                Err(Error::MainStateNotAvailable)
+            } else {
+                Ok(())
+            }
+        }
     }
 
     pub fn from_ptr(ptr: *mut sys::lua_State) -> Self {
