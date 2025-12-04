@@ -51,7 +51,7 @@ pub fn module(attr: TokenStream, item: TokenStream) -> TokenStream {
         #func
 
         #[unsafe(no_mangle)]
-        pub extern "C" fn #wrapper_ident(ptr: *mut ljr::sys::lua_State)
+        pub extern "C-unwind" fn #wrapper_ident(ptr: *mut ljr::sys::lua_State)
             -> ::std::os::raw::c_int
         {
             let mut lua = ljr::lua::Lua::from_ptr(ptr);
