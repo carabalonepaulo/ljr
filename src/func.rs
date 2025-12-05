@@ -131,20 +131,27 @@ where
 }
 
 #[derive(Debug)]
-pub struct OwnedInner {
-    lua: RefCell<Rc<InnerLua>>,
-    id: i32,
-}
-
-#[derive(Debug)]
 pub struct OwnedState<I, O>
 where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    inner: Rc<OwnedInner>,
+    lua: RefCell<Rc<InnerLua>>,
+    id: i32,
     fn_ptr: *const std::ffi::c_void,
     marker: PhantomData<(I, O)>,
+}
+
+impl<I, O> Drop for OwnedState<I, O>
+where
+    I: FromLua + ToLua,
+    O: FromLua + ToLua,
+{
+    fn drop(&mut self) {
+        if let Some(ptr) = self.lua.borrow().try_state() {
+            unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
+        }
+    }
 }
 
 impl<I, O> FuncState<I, O> for Owned
@@ -161,7 +168,7 @@ where
     O: FromLua + ToLua,
 {
     fn ptr(&self) -> *mut mlua_sys::lua_State {
-        self.inner.lua.borrow().state()
+        self.lua.borrow().state()
     }
 
     fn fn_ptr(&self) -> *const std::ffi::c_void {
@@ -169,7 +176,7 @@ where
     }
 
     fn push_fn(&self, ptr: *mut mlua_sys::lua_State) {
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.inner.id as _) };
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id as _) };
     }
 }
 
@@ -211,10 +218,18 @@ where
     O: FromLua + ToLua,
 {
     fn clone(&self) -> Self {
+        let lua = self.state.lua.clone();
+        let fn_ptr = self.state.fn_ptr;
+        let id = unsafe {
+            let ptr = lua.borrow().state();
+            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _);
+            sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX)
+        };
         Self {
             state: OwnedState {
-                inner: self.state.inner.clone(),
-                fn_ptr: self.state.fn_ptr,
+                lua,
+                id,
+                fn_ptr,
                 marker: PhantomData,
             },
         }
@@ -261,7 +276,8 @@ where
                 let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
                 Some(FnRef {
                     state: OwnedState {
-                        inner: Rc::new(OwnedInner { lua, id }),
+                        lua,
+                        id,
                         fn_ptr,
                         marker: PhantomData,
                     },
@@ -300,8 +316,8 @@ where
     O: FromLua + ToLua,
 {
     fn to_lua(self, ptr: *mut sys::lua_State) {
-        InnerLua::ensure_context_raw(self.state.inner.lua.borrow().state(), ptr);
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.inner.id as _) };
+        InnerLua::ensure_context_raw(self.state.lua.borrow().state(), ptr);
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _) };
     }
 }
 
@@ -363,6 +379,6 @@ where
     O: FromLua + ToLua,
 {
     fn handle(&self) -> LuaInnerHandle<'_> {
-        LuaInnerHandle(&self.state.inner.lua)
+        LuaInnerHandle(&self.state.lua)
     }
 }

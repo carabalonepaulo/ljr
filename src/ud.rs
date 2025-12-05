@@ -64,37 +64,38 @@ where
     }
 }
 
-#[derive(Debug)]
-pub struct OwnedInner {
-    lua: RefCell<Rc<InnerLua>>,
-    id: i32,
-}
+// #[derive(Debug)]
+// pub struct OwnedInner {
+// lua: RefCell<Rc<InnerLua>>,
+// id: i32,
+// }
 
-impl Drop for OwnedInner {
-    fn drop(&mut self) {
-        if let Some(ptr) = self.lua.borrow().try_state() {
-            unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
-        }
-    }
-}
+// impl Drop for OwnedInner {
+//     fn drop(&mut self) {
+//         if let Some(ptr) = self.lua.borrow().try_state() {
+//             unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
+//         }
+//     }
+// }
 
 #[derive(Debug)]
 pub struct OwnedState<T>
 where
     T: UserData,
 {
-    inner: Rc<OwnedInner>,
+    // inner: Rc<OwnedInner>,
+    lua: RefCell<Rc<InnerLua>>,
+    id: i32,
     ud_ptr: *mut *mut RefCell<T>,
 }
 
-impl<T> Clone for OwnedState<T>
+impl<T> Drop for OwnedState<T>
 where
     T: UserData,
 {
-    fn clone(&self) -> Self {
-        Self {
-            inner: self.inner.clone(),
-            ud_ptr: self.ud_ptr,
+    fn drop(&mut self) {
+        if let Some(ptr) = self.lua.borrow().try_state() {
+            unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
         }
     }
 }
@@ -115,12 +116,12 @@ where
     }
 
     fn as_ref(&self) -> Ref<'_, T> {
-        let _ = self.inner.lua.borrow().state();
+        let _ = self.lua.borrow().state();
         unsafe { (&**self.ud_ptr).borrow() }
     }
 
     fn as_mut(&self) -> RefMut<'_, T> {
-        let _ = self.inner.lua.borrow().state();
+        let _ = self.lua.borrow().state();
         unsafe { (&**self.ud_ptr).borrow_mut() }
     }
 }
@@ -171,8 +172,16 @@ where
     T: UserData,
 {
     fn clone(&self) -> Self {
+        let lua = self.state.lua.clone();
+        let ud_ptr = self.state.ud_ptr;
+        let id = unsafe {
+            let ptr = lua.borrow().state();
+            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _);
+            sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX)
+        };
+
         Self {
-            state: self.state.clone(),
+            state: OwnedState { lua, id, ud_ptr },
         }
     }
 }
@@ -238,10 +247,7 @@ where
             let lua = RefCell::new(InnerLua::from_ptr(ptr));
             let ud_ptr = sys::lua_touserdata(ptr, idx) as *mut *mut RefCell<T>;
             let ud = UdRef::<T> {
-                state: OwnedState {
-                    inner: Rc::new(OwnedInner { lua, id }),
-                    ud_ptr,
-                },
+                state: OwnedState { lua, id, ud_ptr },
             };
 
             Some(ud)
@@ -264,8 +270,8 @@ where
     T: UserData,
 {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
-        InnerLua::ensure_context_raw(self.state.inner.lua.borrow().state(), ptr);
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.inner.id as _) };
+        InnerLua::ensure_context_raw(self.state.lua.borrow().state(), ptr);
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _) };
     }
 }
 
@@ -328,6 +334,6 @@ where
     T: UserData,
 {
     fn handle(&self) -> LuaInnerHandle<'_> {
-        LuaInnerHandle(&self.state.inner.lua)
+        LuaInnerHandle(&self.state.lua)
     }
 }

@@ -73,23 +73,18 @@ impl TableAccess for BorrowedState {
 }
 
 #[derive(Debug, Clone)]
-pub struct OwnedInner {
+pub struct OwnedState {
     lua: RefCell<Rc<InnerLua>>,
     id: i32,
+    table_ptr: *const std::ffi::c_void,
 }
 
-impl Drop for OwnedInner {
+impl Drop for OwnedState {
     fn drop(&mut self) {
         if let Some(ptr) = self.lua.borrow().try_state() {
             unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct OwnedState {
-    inner: Rc<OwnedInner>,
-    table_ptr: *const std::ffi::c_void,
 }
 
 impl TableStorage for Owned {
@@ -104,9 +99,9 @@ impl TableAccess for OwnedState {
 
     fn as_ref<'t>(&'t self) -> Guard<'t> {
         unsafe {
-            let ptr = self.inner.lua.borrow().state();
+            let ptr = self.lua.borrow().state();
             let top = sys::lua_gettop(ptr);
-            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.inner.id as _);
+            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id as _);
             let table_idx = sys::lua_absindex(ptr, -1);
             let view = TableView::new(ptr, table_idx);
             Guard(ptr, top, view)
@@ -115,9 +110,9 @@ impl TableAccess for OwnedState {
 
     fn as_mut<'t>(&'t mut self) -> GuardMut<'t> {
         unsafe {
-            let ptr = self.inner.lua.borrow().state();
+            let ptr = self.lua.borrow().state();
             let top = sys::lua_gettop(ptr);
-            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.inner.id as _);
+            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id as _);
             let table_idx = sys::lua_absindex(ptr, -1);
             let view = TableView::new(ptr, table_idx);
             GuardMut(ptr, top, view)
@@ -265,9 +260,8 @@ impl TableRef {
             let table_ptr = sys::lua_topointer(ptr, -1);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
             let lua = RefCell::new(lua);
-            let inner = Rc::new(OwnedInner { lua, id });
             Self {
-                state: OwnedState { inner, table_ptr },
+                state: OwnedState { lua, id, table_ptr },
             }
         }
     }
@@ -278,9 +272,8 @@ impl TableRef {
             sys::lua_pushvalue(ptr, idx);
             let table_ptr = sys::lua_topointer(ptr, -1);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-            let inner = Rc::new(OwnedInner { lua, id });
             Self {
-                state: OwnedState { inner, table_ptr },
+                state: OwnedState { lua, id, table_ptr },
             }
         }
     }
@@ -329,8 +322,8 @@ unsafe impl ToLua for StackTable {
 
 unsafe impl ToLua for &TableRef {
     fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
-        InnerLua::ensure_context_raw(self.state.inner.lua.borrow().state(), ptr);
-        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.inner.id as _) };
+        InnerLua::ensure_context_raw(self.state.lua.borrow().state(), ptr);
+        unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _) };
     }
 }
 
@@ -446,6 +439,6 @@ impl crate::owned_value::private::Sealed for TableRef {}
 
 impl OwnedValue for TableRef {
     fn handle(&self) -> LuaInnerHandle<'_> {
-        LuaInnerHandle(&self.state.inner.lua)
+        LuaInnerHandle(&self.state.lua)
     }
 }
