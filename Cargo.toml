@@ -3,12 +3,8 @@ name = "ljr"
 version = "0.1.0"
 edition = "2024"
 
-[[bin]]
-name = "main"
-path = "src/main.rs"
-
 [dependencies]
-mlua-sys = { version = "0.8.3", default-features = false }
+mlua-sys = { version = "0.9", default-features = false }
 thiserror = "2.0.17"
 macros = { path = "./macros" }
 
@@ -19,3 +15,19 @@ members = ["macros", "codegen", "tests"]
 default = ["static"]
 static = ["mlua-sys/vendored", "mlua-sys/luajit"]
 dynamic = ["mlua-sys/module", "mlua-sys/luajit"]
+
+[dev-dependencies]
+criterion = "0.8.0"
+mlua = { version = "0.11.5", features = [
+    "luajit",
+    "macros",
+    "mlua_derive",
+    "userdata-wrappers",
+] }
+
+[[bench]]
+name = "mlua"
+harness = false
+
+[profile.release]
+mlua = true
