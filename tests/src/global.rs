@@ -93,29 +93,3 @@ fn test_get_global_option_none_and_some() {
     let some = lua.get_global::<i32>("maybe_num");
     assert_eq!(some, Some(123));
 }
-
-#[test]
-fn test_ud() {
-    fn test() {
-        struct Ud {
-            val: bool,
-        }
-
-        #[user_data]
-        impl Ud {
-            fn is_ok(&self) -> bool {
-                self.val
-            }
-        }
-
-        let mut lua = Lua::new();
-        lua.open_libs();
-        lua.set_global("obj", Ud { val: true });
-        let v = lua.do_string::<bool>("return obj:is_ok()").unwrap();
-        std::hint::black_box(v);
-    }
-
-    for i in 0..100000 {
-        std::hint::black_box(test());
-    }
-}

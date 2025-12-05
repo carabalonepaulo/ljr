@@ -26,7 +26,7 @@ mlua = { version = "0.11.5", features = [
 ] }
 
 [[bench]]
-name = "mlua"
+name = "main"
 harness = false
 
 [profile.release]
