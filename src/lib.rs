@@ -54,6 +54,13 @@ impl Mode for Owned {}
 pub struct Borrowed;
 impl Mode for Borrowed {}
 
+#[repr(transparent)]
+pub struct SyncLuaReg(pub sys::luaL_Reg);
+
+unsafe impl Send for SyncLuaReg {}
+
+unsafe impl Sync for SyncLuaReg {}
+
 #[macro_export]
 macro_rules! create_table {
     ($lua:expr, { $($item:tt)* }) => {{

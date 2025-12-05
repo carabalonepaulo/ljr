@@ -316,7 +316,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
         };
 
         quote! {
-            ljr::sys::luaL_Reg {
+            ljr::SyncLuaReg(ljr::sys::luaL_Reg {
                 name: #method_name.as_ptr() as _,
                 func: {
                     unsafe extern "C-unwind" fn trampoline(ptr: *mut ljr::sys::lua_State) -> std::ffi::c_int {
@@ -324,7 +324,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                     }
                     trampoline
                 }
-            }
+            })
         }
     });
 
@@ -341,16 +341,16 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
     quote! {
         #item
 
-        const #regs_ident: [ljr::sys::luaL_Reg; #regs_count] = [
+        static #regs_ident: [ljr::SyncLuaReg; #regs_count] = [
             #reg_list
-            ljr::sys::luaL_Reg {
+            ljr::SyncLuaReg(ljr::sys::luaL_Reg {
                 name: concat!("__META_", stringify!(#ud_ty), "\0").as_ptr() as _,
                 func: ljr::dummy_trampoline,
-            },
-            ljr::sys::luaL_Reg {
+            }),
+            ljr::SyncLuaReg(ljr::sys::luaL_Reg {
                 name: std::ptr::null(),
                 func: ljr::dummy_trampoline,
-            }
+            })
         ];
 
         impl ljr::UserData for #ud_ty {
@@ -359,7 +359,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
             }
 
             fn functions() -> &'static [ljr::sys::luaL_Reg] {
-                &#regs_ident
+                unsafe { &*(&#regs_ident as *const [ljr::SyncLuaReg; #regs_count] as *const [ljr::sys::luaL_Reg; #regs_count]) }
             }
         }
     }
