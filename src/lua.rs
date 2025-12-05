@@ -287,11 +287,55 @@ impl Lua {
         })
     }
 
+    pub fn do_string_with<T: FromLua + ToLua, F: FnOnce(&T) -> R, R>(
+        &mut self,
+        code: &str,
+        f: F,
+    ) -> Result<R, Error> {
+        self.eval_with::<T, _, _, _>(
+            |ptr| {
+                let cstring = CString::new(code)?;
+                Ok(unsafe { sys::luaL_loadstring(ptr, cstring.as_ptr() as _) })
+            },
+            f,
+        )
+    }
+
     pub fn do_string<T: ValueArg + FromLua + ToLua>(&mut self, code: &str) -> Result<T, Error> {
         self.eval::<T, _>(|ptr| {
             let cstring = CString::new(code)?;
             Ok(unsafe { sys::luaL_loadstring(ptr, cstring.as_ptr() as _) })
         })
+    }
+
+    fn eval_with<
+        T: FromLua + ToLua,
+        F: FnOnce(*mut sys::lua_State) -> Result<std::ffi::c_int, Error>,
+        X: FnOnce(&T) -> R,
+        R,
+    >(
+        &mut self,
+        f: F,
+        x: X,
+    ) -> Result<R, Error> {
+        let ptr = self.state();
+        if f(ptr)? != 0 {
+            let msg = <String as FromLua>::from_lua(ptr, -1).unwrap_or_default();
+            unsafe { sys::lua_pop(ptr, 1) };
+            return Err(Error::InvalidSyntax(msg));
+        }
+
+        if unsafe { sys::lua_pcall(ptr, 0, <T as FromLua>::len(), 0) } != 0 {
+            unsafe { Err(Error::from_stack(ptr, -1)) }
+        } else {
+            let size = <T as FromLua>::len();
+            let value = T::from_lua(ptr, -size).ok_or(Error::WrongReturnType)?;
+            let result = x(&value);
+            if size > 0 {
+                unsafe { sys::lua_pop(ptr, size) };
+            }
+            Ok(result)
+        }
     }
 
     fn eval<

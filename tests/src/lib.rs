@@ -78,6 +78,16 @@ fn test_do_string_error() {
 }
 
 #[test]
+fn test_do_string_with_borrowed_str() {
+    let mut lua = Lua::new();
+    lua.do_string_with("return 'hello world'", |s: &StackStr| {
+        assert!(s.as_str().unwrap() == "hello world");
+    })
+    .unwrap();
+    assert_eq!(lua.top(), 0);
+}
+
+#[test]
 fn test_simple_user_data() {
     let lua = Lua::new();
     lua.open_libs();
