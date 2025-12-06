@@ -64,26 +64,11 @@ where
     }
 }
 
-// #[derive(Debug)]
-// pub struct OwnedInner {
-// lua: RefCell<Rc<InnerLua>>,
-// id: i32,
-// }
-
-// impl Drop for OwnedInner {
-//     fn drop(&mut self) {
-//         if let Some(ptr) = self.lua.borrow().try_state() {
-//             unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
-//         }
-//     }
-// }
-
 #[derive(Debug)]
 pub struct OwnedState<T>
 where
     T: UserData,
 {
-    // inner: Rc<OwnedInner>,
     lua: RefCell<Rc<InnerLua>>,
     id: i32,
     ud_ptr: *mut *mut RefCell<T>,

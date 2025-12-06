@@ -27,6 +27,8 @@ pub enum Error {
         "main lua state is not available (library initialized inside a coroutine without explicit anchoring)"
     )]
     MainStateNotAvailable,
+    #[error("Cannot grow Lua stack to required size")]
+    StackCapacityExceeded,
 }
 
 impl From<NulError> for Error {
