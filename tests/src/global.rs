@@ -2,94 +2,50 @@
 use ljr::prelude::*;
 
 #[test]
-fn test_get_global_primitives_and_string() {
-    let mut lua = Lua::new();
+fn test_globals_set_and_get_primitives() {
+    let lua = Lua::new();
     lua.open_libs();
 
-    lua.set_global("x", 42i32);
-    assert_eq!(lua.get_global::<i32>("x"), Some(42));
+    let mut globals = lua.globals();
 
-    lua.set_global("f", 3.14f64);
-    assert_eq!(lua.get_global::<f64>("f"), Some(3.14));
+    globals.with_mut(|t| {
+        t.set("x", 42i32);
+        t.set("f", 3.14f64);
+        t.set("b", true);
+        t.set("s", "rust_string");
+    });
 
-    lua.set_global("b", true);
-    assert_eq!(lua.get_global::<bool>("b"), Some(true));
+    globals.with(|t| {
+        assert_eq!(t.get::<i32>("x"), Some(42));
+        assert_eq!(t.get::<f64>("f"), Some(3.14));
+        assert_eq!(t.get::<bool>("b"), Some(true));
+        assert_eq!(t.get::<String>("s").as_deref(), Some("rust_string"));
+    });
 
-    lua.set_global("s", "hello");
-    let s = lua.get_global::<String>("s");
-    assert_eq!(s.as_deref(), Some("hello"));
-}
-
-#[test]
-fn test_get_global_luastr() {
-    let mut lua = Lua::new();
-    lua.open_libs();
-
-    let s = lua.create_str("hello");
-    lua.set_global("ls", s.clone());
-    assert_eq!(lua.top(), 0);
-
-    let got = lua.get_global::<StrRef>("ls");
-    assert!(got.is_some());
-    assert_eq!(got.unwrap().as_str(), Some("hello"));
-}
-
-#[test]
-fn test_get_global_luaref_userdata() {
-    let mut lua = Lua::new();
-    lua.open_libs();
-
-    struct Person {
-        value: i32,
-    }
-
-    #[user_data]
-    impl Person {
-        fn get_value(&self) -> i32 {
-            self.value
-        }
-    }
-
-    let r = lua.create_ref(Person { value: 7 });
-    lua.set_global("person_ref", r.clone());
-
-    let got = lua.get_global::<UdRef<Person>>("person_ref");
+    let missing = globals.with(|t| t.get::<i32>("nao_existe"));
+    assert_eq!(missing, None);
 
     assert_eq!(lua.top(), 0);
-    assert!(got.is_some());
-    assert_eq!(got.unwrap().as_ref().get_value(), 7);
 }
 
 #[test]
-fn test_get_global_fnref_and_call() {
+fn test_globals_read_write_separation() {
     let mut lua = Lua::new();
     lua.open_libs();
 
-    lua.exec(
-        r#"
-            function add(a, b)
-                return a + b, true
-            end
-        "#,
-    )
-    .unwrap();
+    lua.with_globals_mut(|t| {
+        t.set("inteiro", 42);
+        t.set("flutuante", 3.14);
+        t.set("texto", "Rust");
+    });
 
-    let f = lua.get_global::<FnRef<(i32, i32), (i32, bool)>>("add");
-    assert!(f.is_some());
+    lua.with_globals(|t| {
+        assert_eq!(t.get::<i32>("inteiro"), Some(42));
+        assert_eq!(t.get::<f64>("flutuante"), Some(3.14));
 
-    let result = f.unwrap().call((5, 6)).unwrap();
-    assert_eq!(result, (11, true));
-}
+        let len = t.view("texto", |s: &StackStr| s.as_str().unwrap().len());
+        assert_eq!(len, Some(4));
+    });
 
-#[test]
-fn test_get_global_option_none_and_some() {
-    let mut lua = Lua::new();
-    lua.open_libs();
-
-    let none = lua.get_global::<i32>("maybe_nil");
-    assert_eq!(none, None);
-
-    lua.set_global("maybe_num", 123i32);
-    let some = lua.get_global::<i32>("maybe_num");
-    assert_eq!(some, Some(123));
+    assert_eq!(lua.top(), 0);
 }

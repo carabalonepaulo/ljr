@@ -73,7 +73,7 @@ pub fn userdata_simple() {
 
     let mut lua = Lua::new();
     lua.open_libs();
-    lua.set_global("obj", Ud { val: true });
+    lua.with_globals_mut(|g| g.set("obj", Ud { val: true }));
     let v = lua.do_string::<bool>("return obj:is_ok()").unwrap();
     std::hint::black_box(v);
 }
@@ -94,7 +94,7 @@ pub fn userdata_mut_borrowed() {
         }
     }
 
-    lua.set_global("obj", Ud { val: 0 });
+    lua.with_globals_mut(|g| g.set("obj", Ud { val: 0 }));
     lua.do_string_with(
         "return function(n) return obj:add(n) end",
         |f: &StackFn<i32, i32>| {
@@ -122,7 +122,8 @@ pub fn userdata_mut_owned() {
         }
     }
 
-    lua.set_global("obj", Ud { val: 0 });
+    lua.with_globals_mut(|g| g.set("obj", Ud { val: 0 }));
+
     let func = lua
         .do_string::<FnRef<i32, i32>>("return function(n) return obj:add(n) end")
         .unwrap();
@@ -145,7 +146,7 @@ pub fn call_ud_static_sum_loop_borrowed() {
         }
     }
 
-    lua.set_global("test", Test);
+    lua.with_globals_mut(|g| g.set("test", Test));
 
     let code = r#"
     return function()
@@ -174,7 +175,7 @@ pub fn call_ud_static_sum_loop_owned() {
         }
     }
 
-    lua.set_global("test", Test);
+    lua.with_globals_mut(|g| g.set("test", Test));
 
     let code = r#"
     return function()
@@ -206,7 +207,7 @@ pub fn call_ud_sum_loop_borrowed() {
         }
     }
 
-    lua.set_global("test", Test { value: 0 });
+    lua.with_globals_mut(|g| g.set("test", Test { value: 0 }));
     let code = r#"
     return function()
         for i = 1, 1000 do
@@ -240,7 +241,7 @@ pub fn call_ud_sum_loop_owned() {
         }
     }
 
-    lua.set_global("test", Test { value: 0 });
+    lua.with_globals_mut(|g| g.set("test", Test { value: 0 }));
     let code = r#"
     return function()
         for i = 1, 1000 do

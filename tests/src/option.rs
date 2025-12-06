@@ -47,7 +47,7 @@ fn test_from_lua_option_none_bool() {
 fn test_to_lua_option_some_i32() {
     let mut lua = Lua::new();
     let opt_value: Option<i32> = Some(456);
-    lua.set_global("my_value", opt_value);
+    lua.with_globals_mut(|g| g.set("my_value", opt_value));
 
     let result = lua.do_string::<i32>("return my_value");
     assert_eq!(result, Ok(456));
@@ -57,7 +57,7 @@ fn test_to_lua_option_some_i32() {
 fn test_to_lua_option_none_i32() {
     let mut lua = Lua::new();
     let opt_value: Option<i32> = None;
-    lua.set_global("my_value", opt_value);
+    lua.with_globals_mut(|g| g.set("my_value", opt_value));
 
     let result = lua.do_string::<bool>("return my_value == nil");
     assert_eq!(result, Ok(true));
@@ -67,7 +67,7 @@ fn test_to_lua_option_none_i32() {
 fn test_to_lua_option_some_string() {
     let mut lua = Lua::new();
     let opt_value: Option<String> = Some("option string".to_string());
-    lua.set_global("my_string", opt_value);
+    lua.with_globals_mut(|g| g.set("my_string", opt_value));
 
     let result = lua.do_string::<String>("return my_string");
     assert_eq!(result, Ok("option string".to_string()));
@@ -77,7 +77,7 @@ fn test_to_lua_option_some_string() {
 fn test_to_lua_option_none_string() {
     let mut lua = Lua::new();
     let opt_value: Option<String> = None;
-    lua.set_global("my_string", opt_value);
+    lua.with_globals_mut(|g| g.set("my_string", opt_value));
 
     let result = lua.do_string::<bool>("return my_string == nil");
     assert_eq!(result, Ok(true));
@@ -97,9 +97,9 @@ impl OptionTest {
 
     fn set_flag(lua: &mut Lua, flag: Option<bool>) {
         if let Some(value) = flag {
-            lua.set_global("global_flag", value);
+            lua.with_globals_mut(|g| g.set("global_flag", value));
         } else {
-            lua.set_global("global_flag", false);
+            lua.with_globals_mut(|g| g.set("global_flag", false));
         }
     }
 }

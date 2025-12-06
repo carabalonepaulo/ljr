@@ -15,6 +15,7 @@ pub use macros::*;
 pub use mlua_sys as sys;
 
 mod owned_value;
+mod stack_guard;
 
 pub struct AnyUserData;
 

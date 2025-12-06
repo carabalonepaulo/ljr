@@ -4,7 +4,14 @@ pub(crate) use inner_lua::InnerLua;
 use macros::generate_value_arg_tuple_impl;
 
 use crate::{
-    Borrowed, error::UnwrapDisplay, func::FnRef, helper, lstr::StrRef, sys, table::TableRef,
+    Borrowed,
+    error::UnwrapDisplay,
+    func::FnRef,
+    helper,
+    lstr::StrRef,
+    prelude::TableView,
+    sys,
+    table::{StackTable, TableRef},
     ud::UdRef,
 };
 use std::{ffi::CString, fmt::Display, rc::Rc};
@@ -51,6 +58,58 @@ impl Lua {
 
     fn state(&self) -> *mut sys::lua_State {
         self.inner.state()
+    }
+
+    fn use_globals<F: FnOnce(&mut StackTable) -> R, R>(&self, f: F) -> Result<R, Error> {
+        let ptr = self.state();
+        unsafe {
+            helper::try_check_stack(ptr, 1)?;
+            sys::lua_pushvalue(ptr, sys::LUA_GLOBALSINDEX);
+            let mut table = StackTable::from_stack(ptr, -1);
+            let result = f(&mut table);
+            sys::lua_pop(ptr, 1);
+            Ok(result)
+        }
+    }
+
+    pub fn try_with_globals<F: FnOnce(&TableView) -> R, R>(&self, f: F) -> Result<R, Error> {
+        self.use_globals(|t| {
+            let guard = t.as_ref();
+            f(&*guard)
+        })
+    }
+
+    pub fn with_globals<F: FnOnce(&TableView) -> R, R>(&self, f: F) -> R {
+        self.try_with_globals(f).unwrap_display()
+    }
+
+    pub fn try_with_globals_mut<F: FnOnce(&mut TableView) -> R, R>(
+        &mut self,
+        f: F,
+    ) -> Result<R, Error> {
+        self.use_globals(|t| {
+            let mut guard = t.as_mut();
+            f(&mut *guard)
+        })
+    }
+
+    pub fn with_globals_mut<F: FnOnce(&mut TableView) -> R, R>(&mut self, f: F) -> R {
+        self.try_with_globals_mut(f).unwrap_display()
+    }
+
+    pub fn try_globals(&self) -> Result<TableRef, Error> {
+        let ptr = self.state();
+        unsafe {
+            helper::try_check_stack(ptr, 2)?;
+            sys::lua_pushvalue(ptr, sys::LUA_GLOBALSINDEX);
+            let table = TableRef::from_stack(ptr, -1);
+            sys::lua_pop(ptr, 1);
+            Ok(table)
+        }
+    }
+
+    pub fn globals(&self) -> TableRef {
+        self.try_globals().unwrap_display()
     }
 
     pub fn open_libs(&self) {
@@ -178,43 +237,6 @@ impl Lua {
             }
             Ok(value)
         }
-    }
-
-    pub fn try_set_global<T: ToLua>(&mut self, name: &str, value: T) -> Result<(), Error> {
-        const { assert!(T::LEN == 1, "table.set does not support tuples or ()") }
-
-        let ptr = self.state();
-        let len = T::len() + 1;
-        unsafe {
-            helper::try_check_stack(ptr, len)?;
-            sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
-            value.to_lua_unchecked(ptr);
-            sys::lua_settable(ptr, sys::LUA_GLOBALSINDEX);
-        }
-        Ok(())
-    }
-
-    pub fn set_global<T: ToLua>(&mut self, name: &str, value: T) {
-        self.try_set_global(name, value).unwrap_display();
-    }
-
-    pub fn try_get_global<T: FromLua + ValueArg>(&self, name: &str) -> Result<Option<T>, Error> {
-        const { assert!(T::LEN == 1, "table.get does not support tuples or ()") }
-
-        let ptr = self.state();
-        unsafe {
-            helper::try_check_stack(ptr, 1)?;
-            sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
-            sys::lua_gettable(ptr, sys::LUA_GLOBALSINDEX);
-        }
-
-        let out = T::from_lua(ptr, -1);
-        unsafe { sys::lua_pop(ptr, 1) };
-        Ok(out)
-    }
-
-    pub fn get_global<T: FromLua + ValueArg>(&self, name: &str) -> Option<T> {
-        self.try_get_global(name).unwrap_display()
     }
 
     pub fn with_global<T: FromLua, F: FnOnce(&T) -> R, R>(&self, name: &str, f: F) -> Option<R> {

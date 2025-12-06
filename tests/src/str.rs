@@ -7,7 +7,7 @@ fn test_str() {
     lua.open_libs();
 
     let value = lua.create_str("hello world");
-    lua.set_global("global_str", value.clone());
+    lua.with_globals_mut(|g| g.set("global_str", value.clone()));
 
     assert_eq!(value.as_str(), Some("hello world"));
 

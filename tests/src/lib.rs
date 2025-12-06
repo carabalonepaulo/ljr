@@ -378,7 +378,8 @@ fn test_create_ref() {
 
     let mut test_ref = lua.create_ref(Test { value: 0 });
     test_ref.with_mut(|t| t.value = 123);
-    lua.set_global("test_value", test_ref);
+    // lua.set_global("test_value", test_ref);
+    lua.with_globals_mut(|g| g.set("test_value", test_ref));
 
     let value = lua.do_string::<bool>("return test_value:get_value() == 123");
     assert_eq!(value, Ok(true));

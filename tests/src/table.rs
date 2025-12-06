@@ -552,7 +552,7 @@ fn test_table_builder_simple() {
     })
     .with_capacity(2, 1);
 
-    lua.set_global("config", builder);
+    lua.with_globals_mut(|g| g.set("config", builder));
 
     let result = lua.do_string::<bool>(
         r#"
@@ -597,7 +597,7 @@ fn test_table_builder_nested() {
         );
     });
 
-    lua.set_global("data", complex_structure);
+    lua.with_globals_mut(|g| g.set("data", complex_structure));
 
     let result = lua.do_string::<bool>(
         r#"
