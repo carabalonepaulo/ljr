@@ -55,7 +55,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                 .filter_map(|p| {
                     match &p.0 {
                         FnParam::Receiver(_) => {
-                            Some(quote! { <StackUd<#ud_ty> as ljr::from_lua::FromLua>::len() })
+                            Some(quote! { <StackUd<#ud_ty> as ljr::from_lua::FromLua>::LEN })
                         },
                         FnParam::Typed(ty) => {
                             let arg_ty = &ty.ty;
@@ -71,13 +71,13 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                 if ty_name == "Lua" {
                                     None
                                 } else if ty_name == "str" {
-                                    Some(quote! { <ljr::lstr::StackStr as ljr::from_lua::FromLua>::len() })
+                                    Some(quote! { <ljr::lstr::StackStr as ljr::from_lua::FromLua>::LEN })
                                 } else if ty_name == "[u8]" {
-                                    Some(quote! { <ljr::lstr::StackStr as ljr::from_lua::FromLua>::len() })
+                                    Some(quote! { <ljr::lstr::StackStr as ljr::from_lua::FromLua>::LEN })
                                 } else if SPECIAL_TYPES.iter().any(|n| type_info.name().starts_with(n)) {
-                                    Some(quote! { <#inner_ty as ljr::from_lua::FromLua>::len() })
+                                    Some(quote! { <#inner_ty as ljr::from_lua::FromLua>::LEN })
                                 } else {
-                                    Some(quote! { <StackUd<#inner_ty> as ljr::from_lua::FromLua>::len() })
+                                    Some(quote! { <StackUd<#inner_ty> as ljr::from_lua::FromLua>::LEN })
                                 }
                             } else {
                                 if type_info.name().starts_with("Option<") {
@@ -86,17 +86,17 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                     let opt_gen_ty_name = opt_generic.name();
                                     if opt_generic.ref_kind().is_some() {
                                         if opt_gen_ty_name == "str" ||  opt_gen_ty_name == "[u8]" {
-                                            Some(quote! { <StackStr as ljr::from_lua::FromLua>::len() })
+                                            Some(quote! { <StackStr as ljr::from_lua::FromLua>::LEN })
                                         } else if SPECIAL_TYPES.iter().any(|n| opt_gen_ty_name.starts_with(n)) {
-                                            Some(quote! { <#inner_ty as ljr::from_lua::FromLua>::len() })
+                                            Some(quote! { <#inner_ty as ljr::from_lua::FromLua>::LEN })
                                         } else {
-                                            Some(quote! { <StackUd<#inner_ty> as ljr::from_lua::FromLua>::len() })
+                                            Some(quote! { <StackUd<#inner_ty> as ljr::from_lua::FromLua>::LEN })
                                         }
                                     } else {
-                                        Some(quote! { <#arg_ty as ljr::from_lua::FromLua>::len() })
+                                        Some(quote! { <#arg_ty as ljr::from_lua::FromLua>::LEN })
                                     }
                                 } else {
-                                    Some(quote! { <#arg_ty as ljr::from_lua::FromLua>::len() })
+                                    Some(quote! { <#arg_ty as ljr::from_lua::FromLua>::LEN })
                                 }
                             }
                         },

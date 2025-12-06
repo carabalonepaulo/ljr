@@ -181,6 +181,8 @@ impl Lua {
     }
 
     pub fn try_set_global<T: ToLua>(&mut self, name: &str, value: T) -> Result<(), Error> {
+        const { assert!(T::LEN == 1, "table.set does not support tuples or ()") }
+
         let ptr = self.state();
         let len = T::len() + 1;
         unsafe {
@@ -197,6 +199,8 @@ impl Lua {
     }
 
     pub fn try_get_global<T: FromLua + ValueArg>(&self, name: &str) -> Result<Option<T>, Error> {
+        const { assert!(T::LEN == 1, "table.get does not support tuples or ()") }
+
         let ptr = self.state();
         unsafe {
             helper::try_check_stack(ptr, 1)?;

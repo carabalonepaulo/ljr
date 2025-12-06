@@ -6,6 +6,8 @@ use macros::generate_to_lua_tuple_impl;
 use crate::UserData;
 
 pub unsafe trait ToLua: Sized {
+    const LEN: i32 = 1;
+
     unsafe fn to_lua_unchecked(self, ptr: *mut sys::lua_State);
 
     fn to_lua(self, ptr: *mut sys::lua_State) {
@@ -16,7 +18,7 @@ pub unsafe trait ToLua: Sized {
     }
 
     fn len() -> i32 {
-        1
+        Self::LEN
     }
 }
 
@@ -168,11 +170,9 @@ unsafe impl ToLua for Vec<u8> {
 }
 
 unsafe impl ToLua for () {
-    unsafe fn to_lua_unchecked(self, _: *mut mlua_sys::lua_State) {}
+    const LEN: i32 = 0;
 
-    fn len() -> i32 {
-        0
-    }
+    unsafe fn to_lua_unchecked(self, _: *mut mlua_sys::lua_State) {}
 }
 
 unsafe impl<T, E> ToLua for Result<T, E>

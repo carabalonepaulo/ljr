@@ -28,7 +28,7 @@ fn gen_cast(letter: char) -> TokenStream {
         if #var_ident.is_none() {
             return None;
         } else {
-            idx += 1;
+            idx += <#ty_ident as crate::from_lua::FromLua>::LEN;
         }
     }
 }
@@ -42,7 +42,7 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
         let mut letters_a = vec![];
         let mut where_ch = vec![];
         let mut cast_impl = vec![];
-        let len = proc_macro2::Literal::i32_unsuffixed(n as i32);
+        let mut len = vec![];
 
         (0..n).for_each(|i| {
             let letter = alphabet[i];
@@ -51,6 +51,7 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
             letters_a.push(ch.clone());
             cast_impl.push(gen_cast(letter));
             where_ch.push(quote!(#ch: FromLua));
+            len.push(quote!(#ch::LEN));
         });
 
         let return_value = gen_return_value(alphabet[n - 1]);
@@ -60,6 +61,8 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
             where
                 #(#where_ch,)*
             {
+                const LEN: i32 = 0 #(+ #len)*;
+
                 fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
                     let top = unsafe { crate::sys::lua_gettop(ptr) };
                     let mut idx = {
@@ -70,7 +73,7 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
                         }
                     };
 
-                    if top < Self::len() {
+                    if top < Self::LEN {
                         return None;
                     }
 
@@ -78,8 +81,6 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
 
                     #return_value
                 }
-
-                fn len() -> i32 { #len }
             }
         });
     });
@@ -97,18 +98,18 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
         let mut letters_a = vec![];
         let mut letters_b = vec![];
         let mut where_ch = vec![];
-        let len = proc_macro2::Literal::i32_unsuffixed(n as i32);
+        let mut len = vec![];
 
         (0..n).for_each(|i| {
             let letter = alphabet[i];
             let index = syn::Index::from(i);
             let ch = Ident::new(&letter.to_string(), Span::call_site());
 
-            // state_push.push(quote!(state.push(self.#index);));
             state_push.push(quote! { unsafe { self.#index.to_lua_unchecked(ptr) }; });
             letters_a.push(ch.clone());
             letters_b.push(ch.clone());
-            where_ch.push(quote!(#ch: ToLua))
+            where_ch.push(quote!(#ch: ToLua));
+            len.push(quote!(#ch::LEN));
         });
 
         /*
@@ -130,11 +131,11 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
             where
                 #(#where_ch,)*
             {
+                const LEN: i32 = 0 #(+ #len)*;
+
                 unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
                     #(#state_push)*
                 }
-
-                fn len() -> i32 { #len }
             }
         });
     });
