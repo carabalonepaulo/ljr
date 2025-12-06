@@ -105,7 +105,7 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
             let ch = Ident::new(&letter.to_string(), Span::call_site());
 
             // state_push.push(quote!(state.push(self.#index);));
-            state_push.push(quote! { self.#index.to_lua(ptr); });
+            state_push.push(quote! { unsafe { self.#index.to_lua_unchecked(ptr) }; });
             letters_a.push(ch.clone());
             letters_b.push(ch.clone());
             where_ch.push(quote!(#ch: ToLua))
@@ -130,7 +130,7 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
             where
                 #(#where_ch,)*
             {
-                fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+                unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
                     #(#state_push)*
                 }
 

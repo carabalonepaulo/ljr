@@ -33,7 +33,7 @@ pub trait FuncAccess {
             let old_top = sys::lua_gettop(ptr);
             self.push_fn(ptr);
 
-            args.to_lua(ptr);
+            args.to_lua_unchecked(ptr);
             let o_len = <O as FromLua>::len();
 
             if sys::lua_pcall(ptr, <I as ToLua>::len(), o_len, 0) != 0 {
@@ -67,7 +67,7 @@ pub trait FuncAccess {
             let old_top = sys::lua_gettop(ptr);
             self.push_fn(ptr);
 
-            args.to_lua(ptr);
+            args.to_lua_unchecked(ptr);
             let o_len = <O as FromLua>::len();
 
             if sys::lua_pcall(ptr, <I as ToLua>::len(), o_len, 0) != 0 {
@@ -294,7 +294,7 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn to_lua(self, ptr: *mut sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut sys::lua_State) {
         InnerLua::ensure_context_raw(self.state.ptr, ptr);
         unsafe { sys::lua_pushvalue(ptr, self.state.idx) };
     }
@@ -305,8 +305,8 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn to_lua(self, ptr: *mut sys::lua_State) {
-        (&self).to_lua(ptr);
+    unsafe fn to_lua_unchecked(self, ptr: *mut sys::lua_State) {
+        unsafe { (&self).to_lua_unchecked(ptr) };
     }
 }
 
@@ -315,7 +315,7 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn to_lua(self, ptr: *mut sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut sys::lua_State) {
         InnerLua::ensure_context_raw(self.state.lua.borrow().state(), ptr);
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _) };
     }
@@ -326,8 +326,8 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn to_lua(self, ptr: *mut sys::lua_State) {
-        (&self).to_lua(ptr);
+    unsafe fn to_lua_unchecked(self, ptr: *mut sys::lua_State) {
+        unsafe { (&self).to_lua_unchecked(ptr) };
     }
 }
 

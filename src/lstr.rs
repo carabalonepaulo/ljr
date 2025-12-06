@@ -226,28 +226,28 @@ unsafe impl FromLua for StrRef {
 }
 
 unsafe impl ToLua for &StackStr {
-    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
         InnerLua::ensure_context_raw(self.state.ptr, ptr);
         unsafe { sys::lua_pushvalue(ptr, self.state.idx) };
     }
 }
 
 unsafe impl ToLua for &StrRef {
-    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
         InnerLua::ensure_context_raw(self.state.lua.borrow().state(), ptr);
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _) };
     }
 }
 
 unsafe impl ToLua for StackStr {
-    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
-        (&self).to_lua(ptr);
+    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
+        unsafe { (&self).to_lua_unchecked(ptr) };
     }
 }
 
 unsafe impl ToLua for StrRef {
-    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
-        (&self).to_lua(ptr);
+    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
+        unsafe { (&self).to_lua_unchecked(ptr) };
     }
 }
 

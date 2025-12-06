@@ -5,8 +5,15 @@ use macros::generate_to_lua_tuple_impl;
 
 use crate::UserData;
 
-pub unsafe trait ToLua {
-    fn to_lua(self, ptr: *mut sys::lua_State);
+pub unsafe trait ToLua: Sized {
+    unsafe fn to_lua_unchecked(self, ptr: *mut sys::lua_State);
+
+    fn to_lua(self, ptr: *mut sys::lua_State) {
+        unsafe {
+            crate::helper::check_stack(ptr, Self::len());
+            self.to_lua_unchecked(ptr);
+        }
+    }
 
     fn len() -> i32 {
         1
@@ -14,68 +21,68 @@ pub unsafe trait ToLua {
 }
 
 unsafe impl ToLua for &i32 {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushinteger(ptr, (*self) as _) }
     }
 }
 
 unsafe impl ToLua for i32 {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        (&self).to_lua(ptr);
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
+        unsafe { (&self).to_lua_unchecked(ptr) };
     }
 }
 
 unsafe impl ToLua for &f32 {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushnumber(ptr, (*self) as _) }
     }
 }
 
 unsafe impl ToLua for f32 {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        (&self).to_lua(ptr);
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
+        unsafe { (&self).to_lua_unchecked(ptr) };
     }
 }
 
 unsafe impl ToLua for &f64 {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushnumber(ptr, *self) }
     }
 }
 
 unsafe impl ToLua for f64 {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        (&self).to_lua(ptr);
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
+        unsafe { (&self).to_lua_unchecked(ptr) };
     }
 }
 
 unsafe impl ToLua for &bool {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushboolean(ptr, if *self { 1 } else { 0 }) }
     }
 }
 
 unsafe impl ToLua for bool {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushboolean(ptr, if self { 1 } else { 0 }) }
     }
 }
 
 unsafe impl ToLua for &str {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
         unsafe { sys::lua_pushlstring_(ptr, self.as_bytes().as_ptr() as *const i8, self.len()) }
     }
 }
 
 unsafe impl ToLua for &String {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        self.as_str().to_lua(ptr)
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
+        unsafe { self.as_str().to_lua_unchecked(ptr) };
     }
 }
 
 unsafe impl ToLua for String {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
-        (&self).to_lua(ptr);
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
+        unsafe { (&self).to_lua_unchecked(ptr) };
     }
 }
 
@@ -83,7 +90,7 @@ unsafe impl<T> ToLua for T
 where
     T: UserData,
 {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
         let size = std::mem::size_of::<*mut RefCell<T>>();
         let name = T::name();
         let methods = T::functions();
@@ -132,9 +139,9 @@ unsafe impl<T> ToLua for Option<T>
 where
     T: ToLua,
 {
-    fn to_lua(self, ptr: *mut crate::sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
         match self {
-            Some(value) => value.to_lua(ptr),
+            Some(value) => unsafe { value.to_lua_unchecked(ptr) },
             None => {
                 for _ in 0..<T as ToLua>::len() {
                     unsafe { sys::lua_pushnil(ptr) };
@@ -149,19 +156,19 @@ where
 }
 
 unsafe impl ToLua for &[u8] {
-    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
         unsafe { sys::lua_pushlstring(ptr, self.as_ptr() as *const i8, self.len()) };
     }
 }
 
 unsafe impl ToLua for Vec<u8> {
-    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
-        (self.as_ref() as &[u8]).to_lua(ptr);
+    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
+        unsafe { (self.as_ref() as &[u8]).to_lua_unchecked(ptr) };
     }
 }
 
 unsafe impl ToLua for () {
-    fn to_lua(self, _: *mut mlua_sys::lua_State) {}
+    unsafe fn to_lua_unchecked(self, _: *mut mlua_sys::lua_State) {}
 
     fn len() -> i32 {
         0
@@ -173,10 +180,10 @@ where
     T: ToLua,
     E: ToLua,
 {
-    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
         match self {
             Ok(value) => {
-                value.to_lua(ptr);
+                unsafe { value.to_lua_unchecked(ptr) };
 
                 for _ in 0..E::len() {
                     unsafe { sys::lua_pushnil(ptr) };
@@ -187,7 +194,7 @@ where
                     unsafe { sys::lua_pushnil(ptr) };
                 }
 
-                e.to_lua(ptr);
+                unsafe { e.to_lua_unchecked(ptr) };
             }
         }
     }

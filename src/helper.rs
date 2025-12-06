@@ -3,6 +3,7 @@ use std::panic::AssertUnwindSafe;
 use crate::Nil;
 use crate::UserData;
 
+use crate::error::Error;
 use crate::from_lua::FromLua;
 use crate::is_type::IsType;
 use crate::lstr::StackStr;
@@ -159,5 +160,25 @@ where
     match result {
         Ok(n) => n,
         Err(msg) => raise_error(ptr, msg),
+    }
+}
+
+#[inline(always)]
+pub(crate) unsafe fn check_stack(ptr: *mut sys::lua_State, len: i32) {
+    unsafe {
+        if sys::lua_checkstack(ptr, len) == 0 {
+            panic!("{}", crate::error::STACK_OVERFLOW_ERR);
+        }
+    }
+}
+
+#[inline(always)]
+pub(crate) unsafe fn try_check_stack(ptr: *mut sys::lua_State, len: i32) -> Result<(), Error> {
+    unsafe {
+        if sys::lua_checkstack(ptr, len) == 0 {
+            Err(Error::StackCapacityExceeded)
+        } else {
+            Ok(())
+        }
     }
 }

@@ -3,7 +3,10 @@ pub(crate) use inner_lua::InnerLua;
 
 use macros::generate_value_arg_tuple_impl;
 
-use crate::{Borrowed, func::FnRef, lstr::StrRef, sys, table::TableRef, ud::UdRef};
+use crate::{
+    Borrowed, error::UnwrapDisplay, func::FnRef, helper, lstr::StrRef, sys, table::TableRef,
+    ud::UdRef,
+};
 use std::{ffi::CString, fmt::Display, rc::Rc};
 
 use crate::{
@@ -177,23 +180,37 @@ impl Lua {
         }
     }
 
-    pub fn set_global(&mut self, name: &str, value: impl ToLua) {
+    pub fn try_set_global<T: ToLua>(&mut self, name: &str, value: T) -> Result<(), Error> {
         let ptr = self.state();
-        unsafe { sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len()) };
-        value.to_lua(ptr);
-        unsafe { sys::lua_settable(ptr, sys::LUA_GLOBALSINDEX) };
+        let len = T::len() + 1;
+        unsafe {
+            helper::try_check_stack(ptr, len)?;
+            sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
+            value.to_lua_unchecked(ptr);
+            sys::lua_settable(ptr, sys::LUA_GLOBALSINDEX);
+        }
+        Ok(())
     }
 
-    pub fn get_global<T: FromLua + ValueArg>(&self, name: &str) -> Option<T> {
+    pub fn set_global<T: ToLua>(&mut self, name: &str, value: T) {
+        self.try_set_global(name, value).unwrap_display();
+    }
+
+    pub fn try_get_global<T: FromLua + ValueArg>(&self, name: &str) -> Result<Option<T>, Error> {
         let ptr = self.state();
         unsafe {
+            helper::try_check_stack(ptr, 1)?;
             sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
             sys::lua_gettable(ptr, sys::LUA_GLOBALSINDEX);
         }
 
         let out = T::from_lua(ptr, -1);
-        unsafe { sys::lua_pop(ptr, T::len()) };
-        out
+        unsafe { sys::lua_pop(ptr, 1) };
+        Ok(out)
+    }
+
+    pub fn get_global<T: FromLua + ValueArg>(&self, name: &str) -> Option<T> {
+        self.try_get_global(name).unwrap_display()
     }
 
     pub fn with_global<T: FromLua, F: FnOnce(&T) -> R, R>(&self, name: &str, f: F) -> Option<R> {

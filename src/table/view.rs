@@ -165,7 +165,7 @@ impl<'t> TableView<'t> {
 
             sys::lua_pushvalue(ptr, t_idx);
             sys::lua_pushinteger(ptr, index as _);
-            value.to_lua(ptr);
+            value.to_lua_unchecked(ptr);
 
             if sys::lua_pcall(ptr, 3, 0, 0) != 0 {
                 let err = Error::from_stack(ptr, -1);

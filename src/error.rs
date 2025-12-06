@@ -1,7 +1,25 @@
 use std::{
     cell::{BorrowError, BorrowMutError},
     ffi::NulError,
+    fmt::Display,
 };
+
+pub const STACK_OVERFLOW_ERR: &'static str = "cannot grow Lua stack to required size";
+
+pub trait UnwrapDisplay<T> {
+    fn unwrap_display(self) -> T;
+}
+
+impl<T, E: Display> UnwrapDisplay<T> for Result<T, E> {
+    #[inline]
+    #[track_caller]
+    fn unwrap_display(self) -> T {
+        match self {
+            Ok(v) => v,
+            Err(e) => panic!("{}", e),
+        }
+    }
+}
 
 #[derive(Debug, thiserror::Error, PartialEq)]
 pub enum Error {
@@ -27,7 +45,7 @@ pub enum Error {
         "main lua state is not available (library initialized inside a coroutine without explicit anchoring)"
     )]
     MainStateNotAvailable,
-    #[error("Cannot grow Lua stack to required size")]
+    #[error("cannot grow Lua stack to required size")]
     StackCapacityExceeded,
 }
 

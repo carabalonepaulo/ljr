@@ -34,7 +34,7 @@ unsafe impl<F> ToLua for TableBuilder<F>
 where
     F: FnOnce(&mut TableView),
 {
-    fn to_lua(self, ptr: *mut mlua_sys::lua_State) {
+    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
         unsafe { sys::lua_createtable(ptr, self.narr, self.nrec) };
         let mut table = StackTable::from_stack(ptr, -1);
         table.with_mut(self.builder);
