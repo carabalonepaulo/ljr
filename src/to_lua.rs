@@ -1,6 +1,9 @@
 use std::cell::RefCell;
 
-use crate::sys;
+use crate::{
+    error::{Error, UnwrapDisplay},
+    sys,
+};
 use macros::generate_to_lua_tuple_impl;
 
 use crate::UserData;
@@ -10,11 +13,16 @@ pub unsafe trait ToLua: Sized {
 
     unsafe fn to_lua_unchecked(self, ptr: *mut sys::lua_State);
 
-    fn to_lua(self, ptr: *mut sys::lua_State) {
+    fn try_to_lua(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
         unsafe {
-            crate::helper::check_stack(ptr, Self::len());
+            crate::helper::try_check_stack(ptr, Self::len())?;
             self.to_lua_unchecked(ptr);
         }
+        Ok(())
+    }
+
+    fn to_lua(self, ptr: *mut sys::lua_State) {
+        self.try_to_lua(ptr).unwrap_display()
     }
 
     fn len() -> i32 {

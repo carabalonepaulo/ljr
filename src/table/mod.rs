@@ -8,8 +8,9 @@ use std::{
 
 use crate::{
     Borrowed, Mode, Owned,
-    error::Error,
+    error::{Error, UnwrapDisplay},
     from_lua::FromLua,
+    helper,
     is_type::IsType,
     lua::{InnerLua, ValueArg},
     owned_value::LuaInnerHandle,
@@ -81,7 +82,7 @@ pub struct OwnedState {
 
 impl Drop for OwnedState {
     fn drop(&mut self) {
-        if let Some(ptr) = self.lua.borrow().try_state() {
+        if let Ok(ptr) = self.lua.borrow().try_state() {
             unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
         }
     }
@@ -253,17 +254,22 @@ impl StackTable {
 }
 
 impl TableRef {
-    pub fn new(lua: Rc<InnerLua>) -> TableRef {
+    pub fn try_new(lua: Rc<InnerLua>) -> Result<TableRef, Error> {
         unsafe {
-            let ptr = lua.state();
+            let ptr = lua.try_state()?;
+            helper::try_check_stack(ptr, 1)?;
             sys::lua_newtable(ptr);
             let table_ptr = sys::lua_topointer(ptr, -1);
             let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
             let lua = RefCell::new(lua);
-            Self {
+            Ok(Self {
                 state: OwnedState { lua, id, table_ptr },
-            }
+            })
         }
+    }
+
+    pub fn new(lua: Rc<InnerLua>) -> TableRef {
+        Self::try_new(lua).unwrap_display()
     }
 
     pub fn from_stack(ptr: *mut sys::lua_State, idx: i32) -> TableRef {

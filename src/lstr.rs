@@ -6,6 +6,7 @@ use std::{
 
 use crate::{
     Borrowed, Mode, Owned,
+    error::{Error, UnwrapDisplay},
     from_lua::FromLua,
     is_type::IsType,
     lua::InnerLua,
@@ -51,7 +52,7 @@ pub struct OwnedState {
 
 impl Drop for OwnedState {
     fn drop(&mut self) {
-        if let Some(ptr) = self.lua.borrow().try_state() {
+        if let Ok(ptr) = self.lua.borrow().try_state() {
             unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
         }
     }
@@ -108,15 +109,19 @@ impl StackStr {
 }
 
 impl StrRef {
-    pub fn new(lua: Rc<InnerLua>, value: &str) -> StrRef {
-        let ptr = lua.state();
-        value.to_lua(ptr);
+    pub fn try_new(lua: Rc<InnerLua>, value: &str) -> Result<StrRef, Error> {
+        let ptr = lua.try_state()?;
+        value.try_to_lua(ptr)?;
         let slice = slice_from_stack(ptr, -1);
         let id = unsafe { sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX) };
         let lua = RefCell::new(lua);
-        Self {
+        Ok(Self {
             state: OwnedState { lua, id, slice },
-        }
+        })
+    }
+
+    pub fn new(lua: Rc<InnerLua>, value: &str) -> StrRef {
+        Self::try_new(lua, value).unwrap_display()
     }
 
     pub fn from_stack(ptr: *mut sys::lua_State, idx: i32) -> StrRef {

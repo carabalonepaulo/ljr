@@ -142,7 +142,7 @@ where
     O: FromLua + ToLua,
 {
     fn drop(&mut self) {
-        if let Some(ptr) = self.lua.borrow().try_state() {
+        if let Ok(ptr) = self.lua.borrow().try_state() {
             unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
         }
     }

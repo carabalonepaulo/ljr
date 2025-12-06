@@ -164,15 +164,6 @@ where
 }
 
 #[inline(always)]
-pub(crate) unsafe fn check_stack(ptr: *mut sys::lua_State, len: i32) {
-    unsafe {
-        if sys::lua_checkstack(ptr, len) == 0 {
-            panic!("{}", crate::error::STACK_OVERFLOW_ERR);
-        }
-    }
-}
-
-#[inline(always)]
 pub(crate) unsafe fn try_check_stack(ptr: *mut sys::lua_State, len: i32) -> Result<(), Error> {
     unsafe {
         if sys::lua_checkstack(ptr, len) == 0 {

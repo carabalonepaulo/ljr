@@ -10,6 +10,7 @@ use crate::{
     helper,
     lstr::StrRef,
     prelude::TableView,
+    stack_guard::StackGuard,
     sys,
     table::{StackTable, TableRef},
     ud::UdRef,
@@ -61,7 +62,7 @@ impl Lua {
     }
 
     fn use_globals<F: FnOnce(&mut StackTable) -> R, R>(&self, f: F) -> Result<R, Error> {
-        let ptr = self.state();
+        let ptr = self.inner.try_state()?;
         unsafe {
             helper::try_check_stack(ptr, 1)?;
             sys::lua_pushvalue(ptr, sys::LUA_GLOBALSINDEX);
@@ -98,7 +99,7 @@ impl Lua {
     }
 
     pub fn try_globals(&self) -> Result<TableRef, Error> {
-        let ptr = self.state();
+        let ptr = self.inner.try_state()?;
         unsafe {
             helper::try_check_stack(ptr, 2)?;
             sys::lua_pushvalue(ptr, sys::LUA_GLOBALSINDEX);
@@ -116,35 +117,55 @@ impl Lua {
         unsafe { sys::luaL_openlibs(self.state()) };
     }
 
+    pub fn try_create_table(&self) -> Result<TableRef, Error> {
+        Table::try_new(self.inner.clone())
+    }
+
     pub fn create_table(&self) -> TableRef {
         Table::new(self.inner.clone())
     }
 
-    pub fn create_ref<T: UserData>(&self, value: T) -> UdRef<T> {
-        let ptr = self.state();
-        <T as ToLua>::to_lua(value, ptr);
+    pub fn try_create_ref<T: UserData>(&self, value: T) -> Result<UdRef<T>, Error> {
+        let ptr = self.inner.try_state()?;
+        <T as ToLua>::try_to_lua(value, ptr)?;
         let value = <UdRef<T> as FromLua>::from_lua(ptr, -1).unwrap();
         unsafe { sys::lua_pop(ptr, 1) };
-        value
+        Ok(value)
+    }
+
+    pub fn create_ref<T: UserData>(&self, value: T) -> UdRef<T> {
+        self.try_create_ref(value).unwrap_display()
+    }
+
+    pub fn try_create_str(&self, value: &str) -> Result<StrRef, Error> {
+        StrRef::try_new(self.inner.clone(), value)
     }
 
     pub fn create_str(&self, value: &str) -> StrRef {
         StrRef::new(self.inner.clone(), value)
     }
 
-    pub fn register<T: ToLua>(&self, lib_name: &str, lib_instance: T) {
-        let ptr = self.state();
-        let cname = std::ffi::CString::new(lib_name).unwrap();
+    pub fn try_register<T: ToLua>(&self, lib_name: &str, lib_instance: T) -> Result<(), Error> {
+        let ptr = self.inner.try_state()?;
+        let cname = std::ffi::CString::new(lib_name)?;
 
         unsafe {
+            helper::try_check_stack(ptr, 3)?;
+
             sys::lua_getglobal(ptr, c"package".as_ptr());
             sys::lua_getfield(ptr, -1, c"loaded".as_ptr());
 
-            lib_instance.to_lua(ptr);
+            lib_instance.to_lua_unchecked(ptr);
             sys::lua_setfield(ptr, -2, cname.as_ptr());
 
             sys::lua_pop(ptr, 2);
         }
+
+        Ok(())
+    }
+
+    pub fn register<T: ToLua>(&self, lib_name: &str, lib_instance: T) {
+        self.try_register(lib_name, lib_instance).unwrap_display()
     }
 
     pub fn exec(&mut self, code: &str) -> Result<(), Error> {
@@ -193,10 +214,11 @@ impl Lua {
         f: F,
         x: X,
     ) -> Result<R, Error> {
-        let ptr = self.state();
+        let ptr = self.inner.try_state()?;
+        let _g = StackGuard::new(ptr);
+
         if f(ptr)? != 0 {
             let msg = <String as FromLua>::from_lua(ptr, -1).unwrap_or_default();
-            unsafe { sys::lua_pop(ptr, 1) };
             return Err(Error::InvalidSyntax(msg));
         }
 
@@ -206,9 +228,6 @@ impl Lua {
             let size = <T as FromLua>::len();
             let value = T::from_lua(ptr, -size).ok_or(Error::WrongReturnType)?;
             let result = x(&value);
-            if size > 0 {
-                unsafe { sys::lua_pop(ptr, size) };
-            }
             Ok(result)
         }
     }
@@ -220,10 +239,11 @@ impl Lua {
         &mut self,
         f: F,
     ) -> Result<T, Error> {
-        let ptr = self.state();
+        let ptr = self.inner.try_state()?;
+        let _g = StackGuard::new(ptr);
+
         if f(ptr)? != 0 {
             let msg = <String as FromLua>::from_lua(ptr, -1).unwrap_or_default();
-            unsafe { sys::lua_pop(ptr, 1) };
             return Err(Error::InvalidSyntax(msg));
         }
 
@@ -232,30 +252,8 @@ impl Lua {
         } else {
             let size = <T as FromLua>::len();
             let value = T::from_lua(ptr, -size).ok_or(Error::WrongReturnType)?;
-            if size > 0 {
-                unsafe { sys::lua_pop(ptr, size) };
-            }
             Ok(value)
         }
-    }
-
-    pub fn with_global<T: FromLua, F: FnOnce(&T) -> R, R>(&self, name: &str, f: F) -> Option<R> {
-        let ptr = self.state();
-        let top = unsafe { sys::lua_gettop(ptr) };
-
-        unsafe {
-            sys::lua_pushlstring(ptr, name.as_ptr() as _, name.len());
-            sys::lua_gettable(ptr, sys::LUA_GLOBALSINDEX);
-        }
-
-        let result = if let Some(value) = T::from_lua(ptr, -1) {
-            Some(f(&value))
-        } else {
-            None
-        };
-
-        unsafe { sys::lua_settop(ptr, top) };
-        result
     }
 
     pub fn top(&self) -> i32 {

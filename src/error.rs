@@ -47,6 +47,8 @@ pub enum Error {
     MainStateNotAvailable,
     #[error("cannot grow Lua stack to required size")]
     StackCapacityExceeded,
+    #[error("lua state has been closed")]
+    LuaStateClosed,
 }
 
 impl From<NulError> for Error {

@@ -164,9 +164,13 @@ impl InnerLua {
         ptr
     }
 
-    pub(crate) fn try_state(&self) -> Option<*mut sys::lua_State> {
+    pub(crate) fn try_state(&self) -> Result<*mut sys::lua_State, Error> {
         let ptr = self.state.get();
-        if ptr.is_null() { None } else { Some(ptr) }
+        if ptr.is_null() {
+            Err(Error::LuaStateClosed)
+        } else {
+            Ok(ptr)
+        }
     }
 }
 
