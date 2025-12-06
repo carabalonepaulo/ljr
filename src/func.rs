@@ -9,9 +9,11 @@ use crate::{
     Borrowed, Mode, Owned,
     error::Error,
     from_lua::FromLua,
+    helper,
     lua::{InnerLua, ValueArg},
     owned_value::LuaInnerHandle,
     prelude::OwnedValue,
+    stack_guard::StackGuard,
     sys,
     to_lua::ToLua,
 };
@@ -27,67 +29,59 @@ pub trait FuncAccess {
 
     fn push_fn(&self, ptr: *mut sys::lua_State);
 
-    fn call<I: FromLua + ToLua, O: FromLua + ToLua + ValueArg>(&self, args: I) -> Result<O, Error> {
+    fn call<I: ToLua, O: FromLua + ValueArg>(&self, args: I) -> Result<O, Error> {
         unsafe {
             let ptr = self.ptr();
-            let old_top = sys::lua_gettop(ptr);
-            self.push_fn(ptr);
+            helper::try_check_stack(ptr, I::LEN + O::LEN)?;
+            let _g = StackGuard::new(ptr);
 
+            self.push_fn(ptr);
             args.to_lua_unchecked(ptr);
             let o_len = <O as FromLua>::len();
 
             if sys::lua_pcall(ptr, <I as ToLua>::len(), o_len, 0) != 0 {
                 if let Some(msg) = <String as FromLua>::from_lua(ptr, -1) {
-                    sys::lua_pop(ptr, 1);
                     return Err(Error::LuaError(msg));
                 } else {
-                    sys::lua_pop(ptr, 1);
                     return Err(Error::UnknownLuaError);
                 }
             } else {
-                let result = if let Some(value) = O::from_lua(ptr, o_len * -1) {
+                if let Some(value) = O::from_lua(ptr, o_len * -1) {
                     Ok(value)
                 } else {
                     Err(Error::WrongReturnType)
-                };
-
-                sys::lua_settop(ptr, old_top);
-                result
+                }
             }
         }
     }
 
-    fn call_then<I: FromLua + ToLua, O: FromLua + ToLua, F: FnOnce(&O) -> R, R>(
+    fn call_then<I: ToLua, O: FromLua, F: FnOnce(&O) -> R, R>(
         &self,
         args: I,
         f: F,
     ) -> Result<R, Error> {
         unsafe {
             let ptr = self.ptr();
-            let old_top = sys::lua_gettop(ptr);
-            self.push_fn(ptr);
+            helper::try_check_stack(ptr, I::LEN + O::LEN)?;
+            let _g = StackGuard::new(ptr);
 
+            self.push_fn(ptr);
             args.to_lua_unchecked(ptr);
             let o_len = <O as FromLua>::len();
 
             if sys::lua_pcall(ptr, <I as ToLua>::len(), o_len, 0) != 0 {
                 if let Some(msg) = <String as FromLua>::from_lua(ptr, -1) {
-                    sys::lua_pop(ptr, 1);
                     return Err(Error::LuaError(msg));
                 } else {
-                    sys::lua_pop(ptr, 1);
                     return Err(Error::UnknownLuaError);
                 }
             } else {
                 let value = O::from_lua(ptr, o_len * -1);
-                let result = if let Some(val) = value {
+                if let Some(val) = value {
                     Ok(f(&val))
                 } else {
                     Err(Error::WrongReturnType)
-                };
-
-                sys::lua_settop(ptr, old_top);
-                result
+                }
             }
         }
     }
