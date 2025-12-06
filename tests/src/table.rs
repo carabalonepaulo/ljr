@@ -14,7 +14,7 @@ fn test_stack_table_mutation() {
     impl Test {
         fn modify(table: &mut StackTable) {
             table.with_mut(|t| {
-                let current = t.get::<i32>("val").unwrap_or(0);
+                let current = t.get("val").unwrap_or(0);
                 t.set("result", current * 2);
                 t.set("val", 0);
             });
@@ -333,11 +333,11 @@ fn test_table_pop_with_primitive() {
     assert_eq!(table.with(|t| t.len()), 2);
 
     table.with(|t| {
-        let last = t.get::<i32>(3);
+        let last: Option<i32> = t.get(3);
         assert_eq!(last, None);
 
-        let new_last = t.get::<i32>(2);
-        assert_eq!(new_last, Some(20));
+        let new_last = t.get(2);
+        assert_eq!(new_last, Some(20i32));
     });
 
     assert_eq!(lua.top(), 0);

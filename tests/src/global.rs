@@ -16,13 +16,13 @@ fn test_globals_set_and_get_primitives() {
     });
 
     globals.with(|t| {
-        assert_eq!(t.get::<i32>("x"), Some(42));
-        assert_eq!(t.get::<f64>("f"), Some(3.14));
-        assert_eq!(t.get::<bool>("b"), Some(true));
-        assert_eq!(t.get::<String>("s").as_deref(), Some("rust_string"));
+        assert_eq!(t.get("x"), Some(42i32));
+        assert_eq!(t.get("f"), Some(3.14f64));
+        assert_eq!(t.get("b"), Some(true));
+        assert_eq!(t.get("s"), Some("rust_string".to_string()));
     });
 
-    let missing = globals.with(|t| t.get::<i32>("nao_existe"));
+    let missing: Option<i32> = globals.with(|t| t.get("nao_existe"));
     assert_eq!(missing, None);
 
     assert_eq!(lua.top(), 0);
@@ -40,8 +40,8 @@ fn test_globals_read_write_separation() {
     });
 
     lua.with_globals(|t| {
-        assert_eq!(t.get::<i32>("inteiro"), Some(42));
-        assert_eq!(t.get::<f64>("flutuante"), Some(3.14));
+        assert_eq!(t.get("inteiro"), Some(42i32));
+        assert_eq!(t.get("flutuante"), Some(3.14f64));
 
         let len = t.view("texto", |s: &StackStr| s.as_str().unwrap().len());
         assert_eq!(len, Some(4));

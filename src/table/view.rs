@@ -47,24 +47,27 @@ impl<'t> TableView<'t> {
         Self(ptr, idx, PhantomData)
     }
 
-    pub fn set<'a>(&mut self, key: impl ToLua, value: impl ToLua) {
+    pub fn set<'a, K: ToLua, V: ToLua>(&mut self, key: K, value: V) {
+        const { assert!(K::LEN == 1 && V::LEN == 1) }
         key.to_lua(self.0);
         value.to_lua(self.0);
         unsafe { sys::lua_settable(self.0, self.1) };
     }
 
-    pub fn get<'a, T: FromLua + ValueArg>(&self, key: impl ToLua) -> Option<T> {
+    pub fn get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Option<V> {
+        const { assert!(K::LEN == 1 && V::LEN == 1) }
         key.to_lua(self.0);
         unsafe { sys::lua_gettable(self.0, self.1) };
-        let val = <T as FromLua>::from_lua(self.0, -1);
+        let val = V::from_lua(self.0, -1);
         unsafe { sys::lua_pop(self.0, 1) };
         val
     }
 
-    pub fn view<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, key: impl ToLua, f: F) -> Option<R> {
+    pub fn view<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(&self, key: K, f: F) -> Option<R> {
+        const { assert!(K::LEN == 1 && V::LEN == 1) }
         key.to_lua(self.0);
         unsafe { sys::lua_gettable(self.0, self.1) };
-        let value = <T as FromLua>::from_lua(self.0, -1);
+        let value = V::from_lua(self.0, -1);
         let result = if let Some(value) = value {
             Some(f(&value))
         } else {
@@ -74,13 +77,15 @@ impl<'t> TableView<'t> {
         result
     }
 
-    pub fn push(&mut self, value: impl ToLua) {
+    pub fn push<T: ToLua>(&mut self, value: T) {
+        const { assert!(T::LEN == 1) }
         value.to_lua(self.0);
         let len = unsafe { sys::lua_objlen(self.0, self.1) };
         unsafe { sys::lua_rawseti(self.0, self.1, (len + 1) as _) };
     }
 
     pub fn pop<T: FromLua + ValueArg>(&mut self) -> Option<T> {
+        const { assert!(T::LEN == 1) }
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         if len == 0 {
             return None;
@@ -99,6 +104,7 @@ impl<'t> TableView<'t> {
     }
 
     pub fn pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Option<R> {
+        const { assert!(T::LEN == 1) }
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         if len == 0 {
             return None;
@@ -198,6 +204,7 @@ impl<'t> TableView<'t> {
     }
 
     pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Result<T, Error> {
+        const { assert!(T::LEN == 1) }
         unsafe {
             self.remove_impl::<T>(index)?;
 
@@ -238,7 +245,8 @@ impl<'t> TableView<'t> {
         }
     }
 
-    pub fn contains_key<'a>(&self, key: impl ToLua) -> bool {
+    pub fn contains_key<'a, K: ToLua>(&self, key: K) -> bool {
+        const { assert!(K::LEN == 1) }
         key.to_lua(self.0);
         unsafe { sys::lua_gettable(self.0, self.1) };
         let not_nil = unsafe { sys::lua_isnil(self.0, -1) == 0 };
@@ -252,6 +260,7 @@ impl<'t> TableView<'t> {
         V: FromLua,
         F: FnMut(&K, &V) -> bool,
     {
+        const { assert!(K::LEN == 1 && V::LEN == 1) }
         let ptr = self.0;
         let t_idx = self.1;
 
@@ -278,6 +287,7 @@ impl<'t> TableView<'t> {
     }
 
     pub fn ipairs<'s, T: FromLua + ValueArg>(&'s self) -> Ipairs<'t, 's, T> {
+        const { assert!(T::LEN == 1) }
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         Ipairs {
             tref: self,
@@ -290,6 +300,7 @@ impl<'t> TableView<'t> {
     pub fn pairs<'s, K: FromLua + ValueArg, V: FromLua + ValueArg>(
         &'s self,
     ) -> Pairs<'t, 's, K, V> {
+        const { assert!(K::LEN == 1 && V::LEN == 1) }
         Pairs {
             tref: self,
             started: false,
