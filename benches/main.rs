@@ -34,9 +34,27 @@ fn bench_call_fn_primitive(c: &mut Criterion) {
 
 fn bench_call_fn_string(c: &mut Criterion) {
     let mut group = c.benchmark_group("call_fn_string");
-    group.bench_function("lua_call_fn_string", |b| b.iter(|| lua::call_fn_string()));
-    group.bench_function("mlua_call_fn_string", |b| b.iter(|| mlua::call_fn_string()));
-    group.bench_function("ljr_call_fn_string", |b| b.iter(|| ljr::call_fn_string()));
+    group.bench_function("lua_call_fn_string_native", |b| {
+        b.iter(|| lua::call_fn_string_native())
+    });
+    group.bench_function("lua_call_fn_string_borrowed", |b| {
+        b.iter(|| lua::call_fn_string_borrowed())
+    });
+    group.bench_function("mlua_call_fn_string_native", |b| {
+        b.iter(|| mlua::call_fn_string_native())
+    });
+    group.bench_function("mlua_call_fn_string_owned", |b| {
+        b.iter(|| mlua::call_fn_string_owned())
+    });
+    group.bench_function("ljr_call_fn_string_native", |b| {
+        b.iter(|| ljr::call_fn_string_native())
+    });
+    group.bench_function("ljr_call_fn_string_owned", |b| {
+        b.iter(|| ljr::call_fn_string_owned())
+    });
+    group.bench_function("ljr_call_fn_string_borrowed", |b| {
+        b.iter(|| ljr::call_fn_string_borrowed())
+    });
     group.finish();
 }
 
@@ -53,8 +71,49 @@ fn bench_userdata_simple(c: &mut Criterion) {
 fn bench_userdata_mut(c: &mut Criterion) {
     let mut group = c.benchmark_group("userdata_mut");
     group.bench_function("lua_userdata_mut", |b| b.iter(|| lua::userdata_mut()));
-    group.bench_function("mlua_userdata_mut", |b| b.iter(|| mlua::userdata_mut()));
-    group.bench_function("ljr_userdata_mut", |b| b.iter(|| ljr::userdata_mut()));
+    group.bench_function("mlua_userdata_mut_owned", |b| {
+        b.iter(|| mlua::userdata_mut_owned())
+    });
+    group.bench_function("ljr_userdata_mut_owned", |b| {
+        b.iter(|| ljr::userdata_mut_owned())
+    });
+    group.bench_function("ljr_userdata_mut_borrowed", |b| {
+        b.iter(|| ljr::userdata_mut_borrowed())
+    });
+    group.finish();
+}
+
+fn bench_call_ud_static_sum_loop(c: &mut Criterion) {
+    let mut group = c.benchmark_group("call_ud_static_sum_loop");
+    group.bench_function("lua_call_ud_static_sum_loop", |b| {
+        b.iter(|| lua::call_ud_static_sum_loop())
+    });
+    group.bench_function("mlua_call_ud_static_sum_loop_owned", |b| {
+        b.iter(|| mlua::call_ud_static_sum_loop_owned())
+    });
+    group.bench_function("ljr_call_ud_static_sum_loop_borrowed", |b| {
+        b.iter(|| ljr::call_ud_static_sum_loop_borrowed())
+    });
+    group.bench_function("ljr_call_ud_static_sum_loop_owned", |b| {
+        b.iter(|| ljr::call_ud_static_sum_loop_owned())
+    });
+    group.finish();
+}
+
+fn bench_call_ud_sum_loop(c: &mut Criterion) {
+    let mut group = c.benchmark_group("call_ud_sum_loop");
+    group.bench_function("lua_call_ud_sum_loop", |b| {
+        b.iter(|| lua::call_ud_sum_loop())
+    });
+    group.bench_function("mlua_call_ud_sum_loop_owned", |b| {
+        b.iter(|| mlua::call_ud_sum_loop_owned())
+    });
+    group.bench_function("ljr_call_ud_sum_loop_borrowed", |b| {
+        b.iter(|| ljr::call_ud_sum_loop_borrowed())
+    });
+    group.bench_function("ljr_call_ud_sum_loop_owned", |b| {
+        b.iter(|| ljr::call_ud_sum_loop_owned())
+    });
     group.finish();
 }
 
@@ -64,7 +123,9 @@ criterion_group!(
     bench_call_fn_primitive,
     bench_call_fn_string,
     bench_userdata_simple,
-    bench_userdata_mut
+    bench_userdata_mut,
+    bench_call_ud_static_sum_loop,
+    bench_call_ud_sum_loop
 );
 
 criterion_main!(benches);

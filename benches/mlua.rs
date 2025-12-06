@@ -40,7 +40,7 @@ pub fn call_fn_primitive() {
     }
 }
 
-pub fn call_fn_string() {
+pub fn call_fn_string_owned() {
     let lua = Lua::new();
     let func = lua
         .load("return function() return string.rep('a', 200) end")
@@ -54,6 +54,19 @@ pub fn call_fn_string() {
     }
 }
 
+pub fn call_fn_string_native() {
+    let lua = Lua::new();
+    let func = lua
+        .load("return function() return string.rep('a', 200) end")
+        .eval::<mlua::Function>()
+        .unwrap();
+
+    for _ in 0..1000 {
+        let s: String = func.call(()).unwrap();
+        std::hint::black_box(s.len());
+    }
+}
+
 pub fn userdata_simple() {
     let lua = Lua::new();
     lua.globals().set("obj", MluaUD).unwrap();
@@ -62,7 +75,7 @@ pub fn userdata_simple() {
     std::hint::black_box(v);
 }
 
-pub fn userdata_mut() {
+pub fn userdata_mut_owned() {
     let lua = Lua::new();
     lua.globals().set("obj", MluaUD2 { val: 0 }).unwrap();
 
@@ -72,6 +85,66 @@ pub fn userdata_mut() {
         .unwrap();
 
     for i in 0..1000 {
-        let _ = func.call::<i32>(i).unwrap();
+        std::hint::black_box(func.call::<i32>(i).unwrap());
     }
+}
+
+pub fn call_ud_static_sum_loop_owned() {
+    use mlua::{Lua, UserData, UserDataMethods};
+
+    struct Test;
+
+    impl UserData for Test {
+        fn add_methods<'lua, M: UserDataMethods<Self>>(methods: &mut M) {
+            methods.add_function("sum", |_, (a, b): (i32, i32)| Ok(a + b));
+        }
+    }
+
+    let lua = Lua::new();
+
+    lua.globals().set("test", Test).unwrap();
+
+    let code = r#"
+        return function()
+            for i = 1, 1000 do
+                test.sum(i, i)
+            end
+        end
+    "#;
+
+    let f: mlua::Function = lua.load(code).eval().unwrap();
+    std::hint::black_box(f.call::<()>(()).unwrap());
+}
+
+pub fn call_ud_sum_loop_owned() {
+    use mlua::{Lua, UserData, UserDataMethods};
+
+    struct Test {
+        value: i32,
+    }
+
+    impl UserData for Test {
+        fn add_methods<'lua, M: UserDataMethods<Self>>(methods: &mut M) {
+            methods.add_method_mut("sum", |_, this, a: i32| {
+                this.value += a;
+                Ok(())
+            });
+            methods.add_method("get", |_, this, ()| Ok(this.value));
+        }
+    }
+
+    let lua = Lua::new();
+    lua.globals().set("test", Test { value: 0 }).unwrap();
+
+    let code = r#"
+        return function()
+            for i = 1, 1000 do
+                test:sum(i)
+            end
+            return test:get()
+        end
+    "#;
+
+    let f: mlua::Function = lua.load(code).eval().unwrap();
+    std::hint::black_box(f.call::<i32>(()).unwrap());
 }
