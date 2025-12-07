@@ -11,7 +11,7 @@ fn test_fn_ref_unit_return() {
         .unwrap();
 
     let result = lua_fn.call("hello".into());
-    assert!(matches!(result, Some(())));
+    assert!(matches!(result, Ok(())));
     assert_eq!(lua.top(), 0);
 }
 
@@ -25,7 +25,7 @@ fn test_fn_ref_wrong_return() {
         .unwrap();
 
     let result = lua_fn.call("hello".into());
-    assert!(matches!(result, None));
+    assert!(matches!(result, Err(Error::UnexpectedType)));
     assert_eq!(lua.top(), 0);
 }
 
@@ -39,7 +39,7 @@ fn test_fn_ref_no_return() {
         .unwrap();
 
     let result = lua_fn.call("hello".into());
-    assert!(matches!(result, None));
+    assert!(matches!(result, Err(Error::UnexpectedType)));
     assert_eq!(lua.top(), 0);
 }
 
@@ -53,7 +53,7 @@ fn test_fn_ref_no_arg_no_return() {
         .unwrap();
 
     let result = lua_fn.call(());
-    assert!(matches!(result, Some(())));
+    assert!(matches!(result, Ok(())));
     assert_eq!(lua.top(), 0);
 }
 
@@ -67,9 +67,9 @@ fn test_fn_ref_unit_return_on_user_data() {
     #[user_data]
     impl Test {
         fn call(fn_ref: FnRef<String, ()>) -> (bool, bool) {
-            let result = fn_ref.try_call("hello".into());
+            let result = fn_ref.call("hello".into());
             match result {
-                Ok(Some(v)) => (true, v == ()),
+                Ok(v) => (true, v == ()),
                 _ => (false, false),
             }
         }
@@ -159,7 +159,7 @@ fn test_func_call_stack_leak() {
 
     for _ in 0..100 {
         let result = func.call(());
-        assert_eq!(result, Some(42));
+        assert_eq!(result, Ok(42));
     }
 
     assert_eq!(lua.top(), 0);

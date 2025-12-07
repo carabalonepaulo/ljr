@@ -9,10 +9,10 @@ fn gen_return_value(last_letter: char) -> TokenStream {
         .for_each(|lower| {
             let span = Span::call_site();
             let ident = format_ident!("{}_value", lower.to_string(), span = span);
-            values.push(quote!(unsafe { #ident.unwrap_unchecked() }));
+            values.push(quote!(#ident));
         });
     quote! {
-        Some((#(#values,)*))
+        Ok((#(#values,)*))
     }
 }
 
@@ -24,17 +24,13 @@ fn gen_cast(letter: char) -> TokenStream {
     let ty_ident = Ident::new(&uc.to_string(), Span::call_site());
 
     quote! {
-        let #var_ident = <#ty_ident as crate::from_lua::FromLua>::from_lua(ptr, idx);
-        if #var_ident.is_none() {
-            return None;
-        } else {
-            idx += <#ty_ident as crate::from_lua::FromLua>::LEN;
-        }
+        let #var_ident = <#ty_ident as crate::from_lua::FromLua>::try_from_lua(ptr, idx)?;
+        idx += <#ty_ident as crate::from_lua::FromLua>::LEN;
     }
 }
 
 pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
-    let max = 26;
+    let max = 5;
     let mut impls = vec![];
     let alphabet: Vec<char> = (b'A'..b'Z').map(|c| c as char).collect();
 
@@ -63,7 +59,7 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
             {
                 const LEN: i32 = 0 #(+ #len)*;
 
-                fn from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Option<Self> {
+                fn try_from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Result<Self, Error> {
                     let top = unsafe { crate::sys::lua_gettop(ptr) };
                     let mut idx = {
                         if idx.is_negative() {
@@ -74,7 +70,7 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
                     };
 
                     if top < Self::LEN {
-                        return None;
+                        return Err(Error::InsufficientStackValues(Self::LEN, top));
                     }
 
                     #(#cast_impl)*

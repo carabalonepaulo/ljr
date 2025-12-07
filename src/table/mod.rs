@@ -30,17 +30,34 @@ pub trait TableStorage {
 pub trait TableAccess {
     unsafe fn get_table_ptr(&self) -> *const std::ffi::c_void;
 
-    fn as_ref<'t>(&'t self) -> Guard<'t>;
-    fn as_mut<'t>(&'t mut self) -> GuardMut<'t>;
+    fn try_as_ref<'t>(&'t self) -> Result<Guard<'t>, Error>;
+
+    fn as_ref<'t>(&'t self) -> Guard<'t> {
+        self.try_as_ref().unwrap_display()
+    }
+
+    fn try_as_mut<'t>(&'t mut self) -> Result<GuardMut<'t>, Error>;
+
+    fn as_mut<'t>(&'t mut self) -> GuardMut<'t> {
+        self.try_as_mut().unwrap_display()
+    }
+
+    fn try_with<F: FnOnce(&TableView) -> R, R>(&self, f: F) -> Result<R, Error> {
+        let guard = self.try_as_ref()?;
+        Ok(f(&*guard))
+    }
 
     fn with<F: FnOnce(&TableView) -> R, R>(&self, f: F) -> R {
-        let guard = self.as_ref();
-        f(&*guard)
+        self.try_with(f).unwrap_display()
+    }
+
+    fn try_with_mut<F: FnOnce(&mut TableView) -> R, R>(&mut self, f: F) -> Result<R, Error> {
+        let mut guard = self.try_as_mut()?;
+        Ok(f(&mut *guard))
     }
 
     fn with_mut<F: FnOnce(&mut TableView) -> R, R>(&mut self, f: F) -> R {
-        let mut guard = self.as_mut();
-        f(&mut *guard)
+        self.try_with_mut(f).unwrap_display()
     }
 }
 
@@ -60,16 +77,16 @@ impl TableAccess for BorrowedState {
         self.table_ptr
     }
 
-    fn as_ref<'t>(&'t self) -> Guard<'t> {
+    fn try_as_ref<'t>(&'t self) -> Result<Guard<'t>, Error> {
         let view = TableView::new(self.ptr, self.idx);
         let top = unsafe { sys::lua_gettop(self.ptr) };
-        Guard(self.ptr, top, view)
+        Ok(Guard(self.ptr, top, view))
     }
 
-    fn as_mut<'t>(&'t mut self) -> GuardMut<'t> {
+    fn try_as_mut<'t>(&'t mut self) -> Result<GuardMut<'t>, Error> {
         let view = TableView::new(self.ptr, self.idx);
         let top = unsafe { sys::lua_gettop(self.ptr) };
-        GuardMut(self.ptr, top, view)
+        Ok(GuardMut(self.ptr, top, view))
     }
 }
 
@@ -98,25 +115,25 @@ impl TableAccess for OwnedState {
         self.table_ptr
     }
 
-    fn as_ref<'t>(&'t self) -> Guard<'t> {
+    fn try_as_ref<'t>(&'t self) -> Result<Guard<'t>, Error> {
         unsafe {
-            let ptr = self.lua.borrow().state();
+            let ptr = self.lua.borrow().try_state()?;
             let top = sys::lua_gettop(ptr);
             sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id as _);
             let table_idx = sys::lua_absindex(ptr, -1);
             let view = TableView::new(ptr, table_idx);
-            Guard(ptr, top, view)
+            Ok(Guard(ptr, top, view))
         }
     }
 
-    fn as_mut<'t>(&'t mut self) -> GuardMut<'t> {
+    fn try_as_mut<'t>(&'t mut self) -> Result<GuardMut<'t>, Error> {
         unsafe {
-            let ptr = self.lua.borrow().state();
+            let ptr = self.lua.borrow().try_state()?;
             let top = sys::lua_gettop(ptr);
             sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id as _);
             let table_idx = sys::lua_absindex(ptr, -1);
             let view = TableView::new(ptr, table_idx);
-            GuardMut(ptr, top, view)
+            Ok(GuardMut(ptr, top, view))
         }
     }
 }
@@ -140,8 +157,18 @@ where
     M::State: TableAccess,
 {
     #[inline]
+    pub fn try_as_ref<'t>(&'t self) -> Result<Guard<'t>, Error> {
+        self.state.try_as_ref()
+    }
+
+    #[inline]
     pub fn as_ref<'t>(&'t self) -> Guard<'t> {
         self.state.as_ref()
+    }
+
+    #[inline]
+    pub fn try_as_mut<'t>(&'t mut self) -> Result<GuardMut<'t>, Error> {
+        self.state.try_as_mut()
     }
 
     #[inline]
@@ -150,8 +177,18 @@ where
     }
 
     #[inline]
+    pub fn try_with<F: FnOnce(&TableView) -> R, R>(&self, f: F) -> Result<R, Error> {
+        self.state.try_with(f)
+    }
+
+    #[inline]
     pub fn with<F: FnOnce(&TableView) -> R, R>(&self, f: F) -> R {
         self.state.with(f)
+    }
+
+    #[inline]
+    pub fn try_with_mut<F: FnOnce(&mut TableView) -> R, R>(&mut self, f: F) -> Result<R, Error> {
+        self.state.try_with_mut(f)
     }
 
     #[inline]
@@ -211,10 +248,7 @@ impl StackTable {
     }
 
     #[inline]
-    pub fn try_remove<T: FromLua + ValueArg + IsType>(
-        &mut self,
-        index: i32,
-    ) -> Result<Option<T>, Error> {
+    pub fn try_remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Result<T, Error> {
         self.with_mut(|t| t.try_remove(index))
     }
 
@@ -228,7 +262,7 @@ impl StackTable {
         &mut self,
         index: i32,
         f: F,
-    ) -> Result<Option<R>, Error> {
+    ) -> Result<R, Error> {
         self.with_mut(|t| t.try_remove_then(index, f))
     }
 
@@ -348,21 +382,21 @@ impl Clone for TableRef {
 }
 
 unsafe impl FromLua for StackTable {
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
+    fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<Self, Error> {
         if unsafe { sys::lua_istable(ptr, idx) } != 0 {
-            Some(StackTable::from_stack(ptr, idx))
+            Ok(StackTable::from_stack(ptr, idx))
         } else {
-            None
+            Err(Error::UnexpectedType)
         }
     }
 }
 
 unsafe impl FromLua for TableRef {
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
+    fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<Self, Error> {
         if unsafe { sys::lua_istable(ptr, idx) } != 0 {
-            Some(TableRef::from_stack(ptr, idx))
+            Ok(TableRef::from_stack(ptr, idx))
         } else {
-            None
+            Err(Error::UnexpectedType)
         }
     }
 }

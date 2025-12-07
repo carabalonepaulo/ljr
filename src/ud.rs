@@ -232,12 +232,12 @@ unsafe impl<T> FromLua for StackUd<T>
 where
     T: UserData,
 {
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
+    fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<Self, Error> {
         unsafe {
             let idx = sys::lua_absindex(ptr, idx);
 
             if sys::lua_getmetatable(ptr, idx) == 0 {
-                return None;
+                return Err(Error::UnexpectedType);
             }
 
             sys::lua_rawgeti(ptr, -1, 1);
@@ -247,13 +247,13 @@ where
             let expected_type_id = T::functions().as_ptr() as *mut std::ffi::c_void;
             if type_id != expected_type_id {
                 sys::lua_pop(ptr, 1);
-                return None;
+                return Err(Error::UnexpectedType);
             }
 
             sys::lua_pop(ptr, 1);
 
             let ud_ptr = sys::lua_touserdata(ptr, idx) as *mut *mut RefCell<T>;
-            Some(StackUd::<T> {
+            Ok(StackUd::<T> {
                 state: BorrowedState { ptr, idx, ud_ptr },
             })
         }
@@ -264,11 +264,11 @@ unsafe impl<T> FromLua for UdRef<T>
 where
     T: UserData,
 {
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
+    fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<Self, Error> {
         unsafe {
             let idx = sys::lua_absindex(ptr, idx);
             if sys::lua_getmetatable(ptr, idx) == 0 {
-                return None;
+                return Err(Error::UnexpectedType);
             }
 
             sys::lua_rawgeti(ptr, -1, 1);
@@ -278,7 +278,7 @@ where
             let expected_type_id = T::functions().as_ptr() as *mut std::ffi::c_void;
             if type_id != expected_type_id {
                 sys::lua_pop(ptr, 1);
-                return None;
+                return Err(Error::UnexpectedType);
             }
 
             sys::lua_pop(ptr, 1);
@@ -292,7 +292,7 @@ where
                 state: OwnedState { lua, id, ud_ptr },
             };
 
-            Some(ud)
+            Ok(ud)
         }
     }
 }

@@ -2,31 +2,6 @@
 use ljr::prelude::*;
 #[cfg(test)]
 use ljr::sys;
-#[cfg(test)]
-use std::panic::{self, AssertUnwindSafe};
-
-#[cfg(test)]
-fn expect_lua_panic<F: FnOnce() + panic::UnwindSafe>(f: F) {
-    let prev_hook = panic::take_hook();
-    panic::set_hook(Box::new(|_| {}));
-    let result = panic::catch_unwind(f);
-    panic::set_hook(prev_hook);
-
-    match result {
-        Ok(_) => panic!("no panic"),
-        Err(payload) => {
-            let msg = if let Some(s) = payload.downcast_ref::<&str>() {
-                *s
-            } else if let Some(s) = payload.downcast_ref::<String>() {
-                s.as_str()
-            } else {
-                "unknown"
-            };
-
-            assert_eq!(msg, "lua state has been closed");
-        }
-    }
-}
 
 #[cfg(test)]
 unsafe fn setup_and_kill_vm<T, F>(factory: F) -> T
@@ -56,14 +31,16 @@ fn test_table_access_after_vm_close_panics_safely() {
         })
     };
 
-    expect_lua_panic(AssertUnwindSafe(|| {
-        let _ = table.with(|t| t.len());
-    }));
+    assert!(matches!(
+        table.try_with(|t| t.len()),
+        Err(Error::LuaStateClosed)
+    ));
 }
 
 #[test]
 fn test_ud_access_after_vm_close_panics_safely() {
     struct Test;
+
     #[user_data]
     impl Test {
         fn get(&self) -> i32 {
@@ -72,10 +49,7 @@ fn test_ud_access_after_vm_close_panics_safely() {
     }
 
     let ud = unsafe { setup_and_kill_vm(|lua| lua.create_ref(Test)) };
-
-    expect_lua_panic(AssertUnwindSafe(|| {
-        let _ = ud.as_ref();
-    }));
+    assert!(matches!(ud.try_as_ref(), Err(Error::LuaStateClosed)));
 }
 
 #[test]
@@ -86,19 +60,13 @@ fn test_fn_ref_call_after_vm_close_panics_safely() {
                 .unwrap()
         })
     };
-
-    expect_lua_panic(AssertUnwindSafe(|| {
-        let _ = func.call(());
-    }));
+    assert!(matches!(func.call(()), Err(Error::LuaStateClosed)));
 }
 
 #[test]
 fn test_str_ref_access_after_vm_close_panics_safely() {
     let s_ref = unsafe { setup_and_kill_vm(|lua| lua.create_str("I will survive... or not")) };
-
-    expect_lua_panic(AssertUnwindSafe(|| {
-        let _ = s_ref.as_str();
-    }));
+    assert!(matches!(s_ref.try_as_str(), Err(Error::LuaStateClosed)));
 }
 
 #[test]

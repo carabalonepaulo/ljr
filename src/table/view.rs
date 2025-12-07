@@ -71,14 +71,14 @@ impl<'t> TableView<'t> {
         self.try_set(key, value).unwrap_display();
     }
 
-    pub fn try_get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Result<Option<V>, Error> {
+    pub fn try_get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Result<V, Error> {
         const { assert!(K::LEN == 1 && V::LEN == 1) }
+        let _g = StackGuard::new(self.0);
+
         unsafe {
             key.try_to_lua(self.0)?;
             sys::lua_gettable(self.0, self.1);
-            let val = V::from_lua(self.0, -1);
-            sys::lua_pop(self.0, 1);
-            Ok(val)
+            Ok(V::try_from_lua(self.0, -1)?)
         }
     }
 
@@ -91,26 +91,21 @@ impl<'t> TableView<'t> {
         &self,
         key: K,
         f: F,
-    ) -> Result<Option<R>, Error> {
+    ) -> Result<R, Error> {
         const { assert!(K::LEN == 1 && V::LEN == 1) }
         unsafe {
             helper::try_check_stack(self.0, 1)?;
             let _g = StackGuard::new(self.0);
             key.to_lua_unchecked(self.0);
             sys::lua_gettable(self.0, self.1);
-            let value = V::from_lua(self.0, -1);
-            let result = if let Some(value) = value {
-                Some(f(&value))
-            } else {
-                None
-            };
-            Ok(result)
+            let value = V::try_from_lua(self.0, -1)?;
+            Ok(f(&value))
         }
     }
 
     #[inline]
     pub fn view<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(&self, key: K, f: F) -> Option<R> {
-        self.try_view(key, f).unwrap_display()
+        self.try_view(key, f).ok()
     }
 
     pub fn try_push<T: ToLua>(&mut self, value: T) -> Result<(), Error> {
@@ -126,18 +121,18 @@ impl<'t> TableView<'t> {
         self.try_push(value).unwrap_display();
     }
 
-    pub fn try_pop<T: FromLua + ValueArg>(&mut self) -> Result<Option<T>, Error> {
+    pub fn try_pop<T: FromLua + ValueArg>(&mut self) -> Result<T, Error> {
         const { assert!(T::LEN == 1) }
         unsafe { helper::try_check_stack(self.0, 1)? };
+        let _g = StackGuard::new(self.0);
 
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         if len == 0 {
-            return Ok(None);
+            return Err(Error::TableIsEmpty);
         }
 
         unsafe { sys::lua_rawgeti(self.0, self.1, len as _) };
-        let val = <T as FromLua>::from_lua(self.0, -1);
-        unsafe { sys::lua_pop(self.0, 1) };
+        let val = <T as FromLua>::try_from_lua(self.0, -1)?;
 
         unsafe {
             sys::lua_pushnil(self.0);
@@ -149,42 +144,34 @@ impl<'t> TableView<'t> {
 
     #[inline]
     pub fn pop<T: FromLua + ValueArg>(&mut self) -> Option<T> {
-        self.try_pop().unwrap_display()
+        self.try_pop().ok()
     }
 
-    pub fn try_pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(
-        &self,
-        f: F,
-    ) -> Result<Option<R>, Error> {
+    pub fn try_pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Result<R, Error> {
         const { assert!(T::LEN == 1) }
         unsafe { helper::try_check_stack(self.0, self.1)? };
         let _g = StackGuard::new(self.0);
 
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         if len == 0 {
-            return Ok(None);
+            return Err(Error::TableIsEmpty);
         }
 
         unsafe { sys::lua_rawgeti(self.0, self.1, len as _) };
-        let value = <T as FromLua>::from_lua(self.0, -1);
-        let result = if let Some(value) = value {
-            let result = f(&value);
-            unsafe {
-                sys::lua_pushnil(self.0);
-                sys::lua_rawseti(self.0, self.1, len as _);
-            }
+        let value = <T as FromLua>::try_from_lua(self.0, -1)?;
 
-            Some(result)
-        } else {
-            None
-        };
+        let result = f(&value);
+        unsafe {
+            sys::lua_pushnil(self.0);
+            sys::lua_rawseti(self.0, self.1, len as _);
+        }
 
         Ok(result)
     }
 
     #[inline]
     pub fn pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Option<R> {
-        self.try_pop_then(f).unwrap_display()
+        self.try_pop_then(f).ok()
     }
 
     pub fn try_clear(&mut self) -> Result<(), Error> {
@@ -252,18 +239,14 @@ impl<'t> TableView<'t> {
         &mut self,
         index: i32,
         f: F,
-    ) -> Result<Option<R>, Error> {
+    ) -> Result<R, Error> {
         unsafe {
             helper::try_check_stack(self.0, 3)?;
             let _g = StackGuard::new(self.0);
             self.remove_impl::<T>(index)?;
 
-            let value = <T as FromLua>::from_lua(self.0, -1);
-            if let Some(value) = value {
-                Ok(Some(f(&value)))
-            } else {
-                Ok(None)
-            }
+            let value = <T as FromLua>::try_from_lua(self.0, -1)?;
+            Ok(f(&value))
         }
     }
 
@@ -273,25 +256,22 @@ impl<'t> TableView<'t> {
         index: i32,
         f: F,
     ) -> Option<R> {
-        self.try_remove_then(index, f).unwrap_display()
+        self.try_remove_then(index, f).ok()
     }
 
-    pub fn try_remove<T: FromLua + ValueArg + IsType>(
-        &mut self,
-        index: i32,
-    ) -> Result<Option<T>, Error> {
+    pub fn try_remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Result<T, Error> {
         const { assert!(T::LEN == 1) }
         unsafe {
             helper::try_check_stack(self.0, 3)?;
             let _g = StackGuard::new(self.0);
             self.remove_impl::<T>(index)?;
-            Ok(<T as FromLua>::from_lua(self.0, -1))
+            <T as FromLua>::try_from_lua(self.0, -1)
         }
     }
 
     #[inline]
     pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Option<T> {
-        self.try_remove(index).unwrap_display()
+        self.try_remove(index).ok()
     }
 
     unsafe fn remove_impl<T: IsType>(&self, idx: i32) -> Result<(), Error> {
@@ -351,11 +331,11 @@ impl<'t> TableView<'t> {
             sys::lua_pushnil(ptr);
 
             while sys::lua_next(ptr, t_idx) != 0 {
-                let key = <K as FromLua>::from_lua(ptr, -2);
-                let val = <V as FromLua>::from_lua(ptr, -1);
+                let key = <K as FromLua>::try_from_lua(ptr, -2);
+                let val = <V as FromLua>::try_from_lua(ptr, -1);
 
                 let should_continue = match (key, val) {
-                    (Some(k), Some(v)) => f(&k, &v),
+                    (Ok(k), Ok(v)) => f(&k, &v),
                     _ => true,
                 };
 
@@ -421,7 +401,7 @@ where
     fn next(&mut self) -> Option<Self::Item> {
         while self.current <= self.len {
             unsafe { sys::lua_rawgeti(self.tref.0, self.tref.1, self.current as _) };
-            let val = <T as FromLua>::from_lua(self.tref.0, -1);
+            let val = <T as FromLua>::try_from_lua(self.tref.0, -1).ok();
             unsafe { sys::lua_pop(self.tref.0, 1) };
 
             self.current += 1;
@@ -469,12 +449,12 @@ where
                     return None;
                 }
 
-                let key = <K as FromLua>::from_lua(ptr, -2);
-                let value = <V as FromLua>::from_lua(ptr, -1);
+                let key = <K as FromLua>::try_from_lua(ptr, -2);
+                let value = <V as FromLua>::try_from_lua(ptr, -1);
 
                 sys::lua_pop(ptr, 1);
 
-                if let (Some(k), Some(v)) = (key, value) {
+                if let (Ok(k), Ok(v)) = (key, value) {
                     return Some((k, v));
                 }
             }

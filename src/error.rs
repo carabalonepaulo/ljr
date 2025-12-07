@@ -56,6 +56,10 @@ pub enum Error {
     ArgumentCountMismatch(usize, usize),
     #[error("invalid argument {0}, expected {0}")]
     ArgumentTypeMismatch(usize, String),
+    #[error("insufficient values on stack: type requires {0}, but only {1} are available")]
+    InsufficientStackValues(i32, i32),
+    #[error("table is empty")]
+    TableIsEmpty,
 }
 
 impl From<NulError> for Error {
@@ -66,7 +70,7 @@ impl From<NulError> for Error {
 
 impl Error {
     pub(crate) unsafe fn from_stack(ptr: *mut crate::sys::lua_State, idx: i32) -> Error {
-        if let Some(msg) = <String as crate::from_lua::FromLua>::from_lua(ptr, idx) {
+        if let Ok(msg) = <String as crate::from_lua::FromLua>::try_from_lua(ptr, idx) {
             return Error::LuaError(msg);
         } else {
             return Error::UnknownLuaError;

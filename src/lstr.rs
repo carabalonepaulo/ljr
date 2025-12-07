@@ -29,7 +29,7 @@ pub trait StringAccess {
 
     #[inline]
     fn try_as_str<'a>(&'a self) -> Result<&'a str, Error> {
-        Ok(str::from_utf8(self.as_slice())?)
+        Ok(str::from_utf8(self.try_as_slice()?)?)
     }
 }
 
@@ -237,21 +237,21 @@ where
 }
 
 unsafe impl FromLua for StackStr {
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<StackStr> {
+    fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<StackStr, Error> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
-            Some(StackStr::from_stack(ptr, idx))
+            Ok(StackStr::from_stack(ptr, idx))
         } else {
-            None
+            Err(Error::UnexpectedType)
         }
     }
 }
 
 unsafe impl FromLua for StrRef {
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
+    fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<Self, Error> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
-            Some(StrRef::from_stack(ptr, idx))
+            Ok(StrRef::from_stack(ptr, idx))
         } else {
-            None
+            Err(Error::UnexpectedType)
         }
     }
 }

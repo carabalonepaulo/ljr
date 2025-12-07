@@ -42,12 +42,12 @@ pub fn from_lua<T: crate::from_lua::FromLua>(
     idx: &mut i32,
     expected_type: &str,
 ) -> Result<T, Error> {
-    match <T as crate::from_lua::FromLua>::from_lua(ptr, *idx) {
-        Some(value) => {
+    match <T as crate::from_lua::FromLua>::try_from_lua(ptr, *idx) {
+        Ok(value) => {
             *idx += T::len();
             Ok(value)
         }
-        None => Err(Error::ArgumentTypeMismatch(*idx as _, expected_type.into())),
+        Err(_) => Err(Error::ArgumentTypeMismatch(*idx as _, expected_type.into())),
     }
 }
 
@@ -55,12 +55,12 @@ pub fn from_lua_opt<T: FromLua>(
     ptr: *mut sys::lua_State,
     idx: &mut i32,
 ) -> Result<Option<T>, Error> {
-    match T::from_lua(ptr, *idx) {
-        Some(value) => {
+    match T::try_from_lua(ptr, *idx) {
+        Ok(value) => {
             *idx += T::len();
             Ok(Some(value))
         }
-        None => {
+        Err(_) => {
             if Nil::is_type(ptr, *idx) {
                 Ok(None)
             } else {
@@ -77,12 +77,12 @@ pub fn from_lua_opt_str(
     ptr: *mut sys::lua_State,
     idx: &mut i32,
 ) -> Result<Option<StackStr>, Error> {
-    match StackStr::from_lua(ptr, *idx) {
-        Some(value) => {
+    match StackStr::try_from_lua(ptr, *idx) {
+        Ok(value) => {
             *idx += StackStr::len();
             Ok(Some(value))
         }
-        None => {
+        Err(_) => {
             if Nil::is_type(ptr, *idx) {
                 Ok(None)
             } else {
@@ -99,12 +99,12 @@ pub fn from_lua_opt_stack_ud<T>(
 where
     T: UserData,
 {
-    match <StackUd<T> as crate::from_lua::FromLua>::from_lua(ptr, *idx) {
-        Some(value) => {
+    match <StackUd<T> as crate::from_lua::FromLua>::try_from_lua(ptr, *idx) {
+        Ok(value) => {
             *idx += <StackUd<T> as crate::from_lua::FromLua>::len();
             Ok(Some(value))
         }
-        None => {
+        Err(_) => {
             if Nil::is_type(ptr, *idx) {
                 Ok(None)
             } else {
@@ -121,12 +121,12 @@ pub fn from_lua_stack_ref<T>(ptr: *mut sys::lua_State, idx: &mut i32) -> Result<
 where
     T: UserData,
 {
-    match <StackUd<T> as crate::from_lua::FromLua>::from_lua(ptr, *idx) {
-        Some(value) => {
+    match <StackUd<T> as crate::from_lua::FromLua>::try_from_lua(ptr, *idx) {
+        Ok(value) => {
             *idx += <StackUd<T> as crate::from_lua::FromLua>::len();
             Ok(value)
         }
-        None => Err(Error::ArgumentTypeMismatch(
+        Err(_) => Err(Error::ArgumentTypeMismatch(
             *idx as _,
             format!("{} or nil", user_data_unique_name::<T>()),
         )),

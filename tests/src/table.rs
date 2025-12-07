@@ -861,7 +861,7 @@ fn test_remove_then_borrowed_string() {
         })
     });
 
-    assert_eq!(length_of_removed, Ok(Some(7)));
+    assert_eq!(length_of_removed, Ok(7));
     assert_eq!(table.with(|t| t.len()), 2);
 
     let values: Vec<String> = table.with(|t| t.ipairs::<String>().map(|(_, v)| v).collect());

@@ -29,7 +29,7 @@ pub trait FuncAccess {
 
     fn push_fn(&self, ptr: *mut sys::lua_State);
 
-    fn try_call<I: ToLua, O: FromLua + ValueArg>(&self, args: I) -> Result<Option<O>, Error> {
+    fn try_call<I: ToLua, O: FromLua + ValueArg>(&self, args: I) -> Result<O, Error> {
         unsafe {
             let ptr = self.try_ptr()?;
             helper::try_check_stack(ptr, I::LEN + O::LEN)?;
@@ -41,7 +41,7 @@ pub trait FuncAccess {
             if sys::lua_pcall(ptr, I::LEN, O::LEN, 0) != 0 {
                 Err(Error::from_stack(ptr, -1))
             } else {
-                Ok(O::from_lua(ptr, O::LEN * -1))
+                O::try_from_lua(ptr, O::LEN * -1)
             }
         }
     }
@@ -50,7 +50,7 @@ pub trait FuncAccess {
         &self,
         args: I,
         f: F,
-    ) -> Result<Option<R>, Error> {
+    ) -> Result<R, Error> {
         unsafe {
             let ptr = self.try_ptr()?;
             helper::try_check_stack(ptr, I::LEN + O::LEN)?;
@@ -62,7 +62,7 @@ pub trait FuncAccess {
             if sys::lua_pcall(ptr, I::LEN, O::LEN, 0) != 0 {
                 Err(Error::from_stack(ptr, -1))
             } else {
-                Ok(O::from_lua(ptr, O::LEN * -1).map(|v| f(&v)))
+                O::try_from_lua(ptr, O::LEN * -1).map(|v| f(&v))
             }
         }
     }
@@ -175,26 +175,15 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    pub fn try_call(&self, args: I) -> Result<Option<O>, Error>
+    pub fn call(&self, args: I) -> Result<O, Error>
     where
         O: ValueArg,
     {
         self.state.try_call(args)
     }
 
-    pub fn call(&self, args: I) -> Option<O>
-    where
-        O: ValueArg,
-    {
-        self.try_call(args).unwrap_display()
-    }
-
-    pub fn try_call_then<F: FnOnce(&O) -> R, R>(&self, args: I, f: F) -> Result<Option<R>, Error> {
+    pub fn call_then<F: FnOnce(&O) -> R, R>(&self, args: I, f: F) -> Result<R, Error> {
         self.state.try_call_then(args, f)
-    }
-
-    pub fn call_then<F: FnOnce(&O) -> R, R>(&self, args: I, f: F) -> Option<R> {
-        self.try_call_then(args, f).unwrap_display()
     }
 }
 
@@ -237,12 +226,12 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self> {
+    fn try_from_lua(ptr: *mut sys::lua_State, idx: i32) -> Result<Self, Error> {
         unsafe {
             let idx = sys::lua_absindex(ptr, idx);
             if sys::lua_isfunction(ptr, idx) != 0 {
                 let fn_ptr = sys::lua_topointer(ptr, idx);
-                Some(StackFn {
+                Ok(StackFn {
                     state: BorrowedState {
                         ptr,
                         idx,
@@ -251,7 +240,7 @@ where
                     },
                 })
             } else {
-                None
+                Err(Error::UnexpectedType)
             }
         }
     }
@@ -262,7 +251,7 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self> {
+    fn try_from_lua(ptr: *mut sys::lua_State, idx: i32) -> Result<Self, Error> {
         unsafe {
             let idx = sys::lua_absindex(ptr, idx);
             if sys::lua_isfunction(ptr, idx) != 0 {
@@ -270,7 +259,7 @@ where
                 let fn_ptr = sys::lua_topointer(ptr, idx);
                 sys::lua_pushvalue(ptr, idx);
                 let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-                Some(FnRef {
+                Ok(FnRef {
                     state: OwnedState {
                         lua,
                         id,
@@ -279,7 +268,7 @@ where
                     },
                 })
             } else {
-                None
+                Err(Error::UnexpectedType)
             }
         }
     }

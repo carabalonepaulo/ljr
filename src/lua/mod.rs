@@ -128,7 +128,7 @@ impl Lua {
     pub fn try_create_ref<T: UserData>(&self, value: T) -> Result<UdRef<T>, Error> {
         let ptr = self.inner.try_state()?;
         <T as ToLua>::try_to_lua(value, ptr)?;
-        let value = <UdRef<T> as FromLua>::from_lua(ptr, -1).unwrap();
+        let value = <UdRef<T> as FromLua>::try_from_lua(ptr, -1)?;
         unsafe { sys::lua_pop(ptr, 1) };
         Ok(value)
     }
@@ -218,7 +218,7 @@ impl Lua {
         let _g = StackGuard::new(ptr);
 
         if f(ptr)? != 0 {
-            let msg = <String as FromLua>::from_lua(ptr, -1).unwrap_or_default();
+            let msg = <String as FromLua>::try_from_lua(ptr, -1).unwrap_or_default();
             return Err(Error::InvalidSyntax(msg));
         }
 
@@ -226,7 +226,7 @@ impl Lua {
             unsafe { Err(Error::from_stack(ptr, -1)) }
         } else {
             let size = <T as FromLua>::len();
-            let value = T::from_lua(ptr, -size).ok_or(Error::WrongReturnType)?;
+            let value = T::try_from_lua(ptr, -size).map_err(|_| Error::WrongReturnType)?;
             let result = x(&value);
             Ok(result)
         }
@@ -243,7 +243,7 @@ impl Lua {
         let _g = StackGuard::new(ptr);
 
         if f(ptr)? != 0 {
-            let msg = <String as FromLua>::from_lua(ptr, -1).unwrap_or_default();
+            let msg = <String as FromLua>::try_from_lua(ptr, -1)?;
             return Err(Error::InvalidSyntax(msg));
         }
 
@@ -251,7 +251,7 @@ impl Lua {
             unsafe { Err(Error::from_stack(ptr, -1)) }
         } else {
             let size = <T as FromLua>::len();
-            let value = T::from_lua(ptr, -size).ok_or(Error::WrongReturnType)?;
+            let value = T::try_from_lua(ptr, -size).map_err(|_| Error::WrongReturnType)?;
             Ok(value)
         }
     }
@@ -270,15 +270,15 @@ impl Display for Lua {
         for i in 1..=size {
             write!(f, "[{i}/-{}] ", size - i + 1)?;
             if <i32 as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <i32 as FromLua>::from_lua(ptr, i).unwrap())?;
+                writeln!(f, "{}", <i32 as FromLua>::try_from_lua(ptr, i).unwrap())?;
             } else if <f32 as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <f32 as FromLua>::from_lua(ptr, i).unwrap())?;
+                writeln!(f, "{}", <f32 as FromLua>::try_from_lua(ptr, i).unwrap())?;
             } else if <f64 as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <f64 as FromLua>::from_lua(ptr, i).unwrap())?;
+                writeln!(f, "{}", <f64 as FromLua>::try_from_lua(ptr, i).unwrap())?;
             } else if <bool as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <bool as FromLua>::from_lua(ptr, i).unwrap())?;
+                writeln!(f, "{}", <bool as FromLua>::try_from_lua(ptr, i).unwrap())?;
             } else if <String as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <String as FromLua>::from_lua(ptr, i).unwrap())?;
+                writeln!(f, "{}", <String as FromLua>::try_from_lua(ptr, i).unwrap())?;
             } else if <AnyLuaFunction as IsType>::is_type(ptr, i) {
                 writeln!(f, "function")?;
             } else if <AnyNativeFunction as IsType>::is_type(ptr, i) {
