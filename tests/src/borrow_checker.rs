@@ -45,7 +45,7 @@ fn test_reentrancy() {
             "#,
         );
         let _ = redirect.into_inner();
-        let expected_msg = "RefCell already";
+        let expected_msg = "cannot modify value";
         assert!(matches!(result, Err(Error::LuaError(ref msg)) if msg.contains(expected_msg)));
         assert_eq!(lua.top(), 0);
     }
@@ -127,7 +127,7 @@ fn test_callback_reentrancy() {
             "#,
         );
         let _ = redirect.into_inner();
-        let expected_msg = "RefCell already";
+        let expected_msg = "cannot modify value";
         assert!(matches!(result, Err(Error::LuaError(ref msg)) if msg.contains(expected_msg)));
         assert_eq!(lua.top(), 0);
     }

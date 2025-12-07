@@ -23,13 +23,31 @@ pub trait UserDataState<T> {
 pub trait UserDataAccess<T> {
     fn ud_ptr(&self) -> *mut *mut RefCell<T>;
 
-    fn as_ref(&self) -> Ref<'_, T>;
+    fn try_as_ref(&self) -> Result<Ref<'_, T>, Error>;
 
-    fn as_mut(&self) -> RefMut<'_, T>;
+    fn as_ref(&self) -> Ref<'_, T> {
+        self.try_as_ref().unwrap_display()
+    }
+
+    fn try_as_mut(&self) -> Result<RefMut<'_, T>, Error>;
+
+    fn as_mut(&self) -> RefMut<'_, T> {
+        self.try_as_mut().unwrap_display()
+    }
+
+    fn try_with<F: FnOnce(&T) -> R, R>(&self, f: F) -> Result<R, Error> {
+        let guard = self.try_as_ref()?;
+        Ok(f(&*guard))
+    }
 
     fn with<F: FnOnce(&T) -> R, R>(&self, f: F) -> R {
         let guard = self.as_ref();
         f(&*guard)
+    }
+
+    fn try_with_mut<F: FnOnce(&mut T) -> R, R>(&mut self, f: F) -> Result<R, Error> {
+        let mut guard = self.try_as_mut()?;
+        Ok(f(&mut *guard))
     }
 
     fn with_mut<F: FnOnce(&mut T) -> R, R>(&mut self, f: F) -> R {
@@ -62,12 +80,12 @@ where
         self.ud_ptr
     }
 
-    fn as_ref(&self) -> Ref<'_, T> {
-        unsafe { (&**self.ud_ptr).borrow() }
+    fn try_as_ref(&self) -> Result<Ref<'_, T>, Error> {
+        Ok(unsafe { (&**self.ud_ptr).try_borrow()? })
     }
 
-    fn as_mut(&self) -> RefMut<'_, T> {
-        unsafe { (&**self.ud_ptr).borrow_mut() }
+    fn try_as_mut(&self) -> Result<RefMut<'_, T>, Error> {
+        Ok(unsafe { (&**self.ud_ptr).try_borrow_mut()? })
     }
 }
 
@@ -107,14 +125,14 @@ where
         self.ud_ptr
     }
 
-    fn as_ref(&self) -> Ref<'_, T> {
-        let _ = self.lua.borrow().state();
-        unsafe { (&**self.ud_ptr).borrow() }
+    fn try_as_ref(&self) -> Result<Ref<'_, T>, Error> {
+        let _ = self.lua.borrow().try_state()?;
+        Ok(unsafe { (&**self.ud_ptr).try_borrow()? })
     }
 
-    fn as_mut(&self) -> RefMut<'_, T> {
-        let _ = self.lua.borrow().state();
-        unsafe { (&**self.ud_ptr).borrow_mut() }
+    fn try_as_mut(&self) -> Result<RefMut<'_, T>, Error> {
+        let _ = self.lua.borrow().try_state()?;
+        Ok(unsafe { (&**self.ud_ptr).try_borrow_mut()? })
     }
 }
 
@@ -134,22 +152,47 @@ where
     M: Mode + UserDataState<T>,
     M::State: UserDataAccess<T>,
 {
+    #[inline]
+    pub fn try_as_ref(&self) -> Result<Ref<'_, T>, Error> {
+        self.state.try_as_ref()
+    }
+
+    #[inline]
     pub fn as_ref(&self) -> Ref<'_, T> {
         self.state.as_ref()
     }
 
+    #[inline]
+    pub fn try_as_mut(&self) -> Result<RefMut<'_, T>, Error> {
+        self.state.try_as_mut()
+    }
+
+    #[inline]
     pub fn as_mut(&self) -> RefMut<'_, T> {
         self.state.as_mut()
     }
 
+    #[inline]
+    pub fn try_with<F: FnOnce(&T) -> R, R>(&self, f: F) -> Result<R, Error> {
+        self.state.try_with(f)
+    }
+
+    #[inline]
     pub fn with<F: FnOnce(&T) -> R, R>(&self, f: F) -> R {
         self.state.with(f)
     }
 
+    #[inline]
+    pub fn try_with_mut<F: FnOnce(&mut T) -> R, R>(&mut self, f: F) -> Result<R, Error> {
+        self.state.try_with_mut(f)
+    }
+
+    #[inline]
     pub fn with_mut<F: FnOnce(&mut T) -> R, R>(&mut self, f: F) -> R {
         self.state.with_mut(f)
     }
 
+    #[inline]
     fn ud_ptr(&self) -> *mut *mut RefCell<T> {
         self.state.ud_ptr()
     }
