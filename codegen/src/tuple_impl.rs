@@ -85,7 +85,7 @@ pub fn generate_from_lua_tuple_impl(_: TokenStream) -> TokenStream {
 }
 
 pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
-    let max = 26;
+    let max = 5;
     let mut parts = vec![];
     let alphabet: Vec<char> = (b'A'..b'Z').map(|c| c as char).collect();
 
@@ -101,7 +101,7 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
             let index = syn::Index::from(i);
             let ch = Ident::new(&letter.to_string(), Span::call_site());
 
-            state_push.push(quote! { unsafe { self.#index.to_lua_unchecked(ptr) }; });
+            state_push.push(quote! { unsafe { self.#index.try_to_lua_unchecked(ptr)? }; });
             letters_a.push(ch.clone());
             letters_b.push(ch.clone());
             where_ch.push(quote!(#ch: ToLua));
@@ -129,8 +129,11 @@ pub fn generate_to_lua_tuple_impl(_attr: TokenStream) -> TokenStream {
             {
                 const LEN: i32 = 0 #(+ #len)*;
 
-                unsafe fn to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) {
+                unsafe fn try_to_lua_unchecked(self, ptr: *mut crate::sys::lua_State) -> Result<(), crate::error::Error> {
+                    let g = crate::stack_guard::StackGuard::new(ptr);
                     #(#state_push)*
+                    g.commit();
+                    Ok(())
                 }
             }
         });

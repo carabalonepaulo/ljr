@@ -402,28 +402,30 @@ unsafe impl FromLua for TableRef {
 }
 
 unsafe impl ToLua for &StackTable {
-    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
-        InnerLua::ensure_context_raw(self.state.ptr, ptr);
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
+        InnerLua::try_ensure_context_raw(self.state.ptr, ptr)?;
         unsafe { sys::lua_pushvalue(self.state.ptr, self.state.idx) };
+        Ok(())
     }
 }
 
 unsafe impl ToLua for StackTable {
-    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
-        unsafe { (&self).to_lua_unchecked(ptr) };
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
+        unsafe { (&self).try_to_lua_unchecked(ptr) }
     }
 }
 
 unsafe impl ToLua for &TableRef {
-    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
-        InnerLua::ensure_context_raw(self.state.lua.borrow().state(), ptr);
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
+        InnerLua::try_ensure_context_raw(self.state.lua.borrow().try_state()?, ptr)?;
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _) };
+        Ok(())
     }
 }
 
 unsafe impl ToLua for TableRef {
-    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
-        unsafe { (&self).to_lua_unchecked(ptr) };
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
+        unsafe { (&self).try_to_lua_unchecked(ptr) }
     }
 }
 

@@ -46,9 +46,14 @@ impl InnerLua {
         inner
     }
 
-    pub(crate) fn ensure_context_raw(a: *mut sys::lua_State, b: *mut sys::lua_State) {
-        if unsafe { get_vm_id(a) != get_vm_id(b) } {
-            panic!("cannot interact with values from a different lua state")
+    pub(crate) fn try_ensure_context_raw(
+        a: *mut sys::lua_State,
+        b: *mut sys::lua_State,
+    ) -> Result<(), Error> {
+        if unsafe { get_vm_id(a) == get_vm_id(b) } {
+            Ok(())
+        } else {
+            Err(Error::ContextMismatch)
         }
     }
 
@@ -85,7 +90,7 @@ impl InnerLua {
 
     pub unsafe fn try_main_state(&self) -> Result<Rc<InnerLua>, Error> {
         unsafe {
-            let ptr = self.state();
+            let ptr = self.try_state()?;
             let cache_key = &CTX_KEY as *const u8 as *mut std::ffi::c_void;
             sys::lua_pushlightuserdata(ptr, cache_key);
             sys::lua_gettable(ptr, sys::LUA_REGISTRYINDEX);
@@ -154,14 +159,6 @@ impl InnerLua {
             Self::create_and_cache_sentinel(ptr, cache_key, inner.clone());
             inner
         }
-    }
-
-    pub(crate) fn state(&self) -> *mut sys::lua_State {
-        let ptr = self.state.get();
-        if ptr.is_null() {
-            panic!("lua state has been closed");
-        }
-        ptr
     }
 
     pub(crate) fn try_state(&self) -> Result<*mut sys::lua_State, Error> {

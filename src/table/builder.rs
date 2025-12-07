@@ -1,4 +1,5 @@
-use crate::sys;
+use crate::error::Error;
+use crate::{helper, sys};
 use crate::{
     table::{StackTable, TableView},
     to_lua::ToLua,
@@ -34,10 +35,12 @@ unsafe impl<F> ToLua for TableBuilder<F>
 where
     F: FnOnce(&mut TableView),
 {
-    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
+        unsafe { helper::try_check_stack(ptr, 1 + self.narr + self.nrec)? };
         unsafe { sys::lua_createtable(ptr, self.narr, self.nrec) };
         let mut table = StackTable::from_stack(ptr, -1);
         table.with_mut(self.builder);
+        Ok(())
     }
 
     fn len() -> i32 {

@@ -28,19 +28,23 @@ pub struct Lua {
 }
 
 impl Lua {
-    pub fn new() -> Self {
+    pub fn try_new() -> Result<Self, Error> {
         let ptr = unsafe { sys::luaL_newstate() };
         if ptr.is_null() {
-            panic!("lua out of memory: failed to create state");
-        }
-
-        Self {
-            inner: InnerLua::new(ptr),
+            Err(Error::StateAllocationFailed)
+        } else {
+            Ok(Self {
+                inner: InnerLua::new(ptr),
+            })
         }
     }
 
+    pub fn new() -> Self {
+        Self::try_new().unwrap_display()
+    }
+
     pub unsafe fn assert_main_state(&self) -> Result<(), Error> {
-        let ptr = self.state();
+        let ptr = self.inner.try_state()?;
         let is_main = unsafe { sys::lua_pushthread(ptr) == 1 };
         unsafe { sys::lua_pop(ptr, 1) };
 
@@ -55,10 +59,6 @@ impl Lua {
         Self {
             inner: InnerLua::from_ptr(ptr),
         }
-    }
-
-    fn state(&self) -> *mut sys::lua_State {
-        self.inner.state()
     }
 
     fn use_globals<F: FnOnce(&mut StackTable) -> R, R>(&self, f: F) -> Result<R, Error> {
@@ -113,8 +113,13 @@ impl Lua {
         self.try_globals().unwrap_display()
     }
 
+    pub fn try_open_libs(&self) -> Result<(), Error> {
+        unsafe { sys::luaL_openlibs(self.inner.try_state()?) };
+        Ok(())
+    }
+
     pub fn open_libs(&self) {
-        unsafe { sys::luaL_openlibs(self.state()) };
+        self.try_open_libs().unwrap_display()
     }
 
     pub fn try_create_table(&self) -> Result<TableRef, Error> {
@@ -256,29 +261,53 @@ impl Lua {
         }
     }
 
+    pub fn try_top(&self) -> Result<i32, Error> {
+        Ok(unsafe { sys::lua_gettop(self.inner.try_state()?) })
+    }
+
     pub fn top(&self) -> i32 {
-        unsafe { sys::lua_gettop(self.state()) }
+        self.try_top().unwrap_display()
     }
 }
 
 impl Display for Lua {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ptr = self.state();
+        let ptr = self.inner.try_state().unwrap_display();
         let size = self.top();
         writeln!(f, "Stack: {}", size)?;
 
         for i in 1..=size {
             write!(f, "[{i}/-{}] ", size - i + 1)?;
             if <i32 as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <i32 as FromLua>::try_from_lua(ptr, i).unwrap())?;
+                writeln!(
+                    f,
+                    "{}",
+                    <i32 as FromLua>::try_from_lua(ptr, i).unwrap_display()
+                )?;
             } else if <f32 as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <f32 as FromLua>::try_from_lua(ptr, i).unwrap())?;
+                writeln!(
+                    f,
+                    "{}",
+                    <f32 as FromLua>::try_from_lua(ptr, i).unwrap_display()
+                )?;
             } else if <f64 as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <f64 as FromLua>::try_from_lua(ptr, i).unwrap())?;
+                writeln!(
+                    f,
+                    "{}",
+                    <f64 as FromLua>::try_from_lua(ptr, i).unwrap_display()
+                )?;
             } else if <bool as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <bool as FromLua>::try_from_lua(ptr, i).unwrap())?;
+                writeln!(
+                    f,
+                    "{}",
+                    <bool as FromLua>::try_from_lua(ptr, i).unwrap_display()
+                )?;
             } else if <String as IsType>::is_type(ptr, i) {
-                writeln!(f, "{}", <String as FromLua>::try_from_lua(ptr, i).unwrap())?;
+                writeln!(
+                    f,
+                    "{}",
+                    <String as FromLua>::try_from_lua(ptr, i).unwrap_display()
+                )?;
             } else if <AnyLuaFunction as IsType>::is_type(ptr, i) {
                 writeln!(f, "function")?;
             } else if <AnyNativeFunction as IsType>::is_type(ptr, i) {

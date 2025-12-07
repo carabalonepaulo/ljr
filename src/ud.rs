@@ -8,6 +8,7 @@ use crate::{
     Borrowed, Mode, Owned, UserData,
     error::{Error, UnwrapDisplay},
     from_lua::FromLua,
+    helper,
     is_type::IsType,
     lua::InnerLua,
     owned_value::LuaInnerHandle,
@@ -234,6 +235,7 @@ where
 {
     fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<Self, Error> {
         unsafe {
+            helper::try_check_stack(ptr, 2)?;
             let idx = sys::lua_absindex(ptr, idx);
 
             if sys::lua_getmetatable(ptr, idx) == 0 {
@@ -266,7 +268,9 @@ where
 {
     fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<Self, Error> {
         unsafe {
+            helper::try_check_stack(ptr, 2)?;
             let idx = sys::lua_absindex(ptr, idx);
+
             if sys::lua_getmetatable(ptr, idx) == 0 {
                 return Err(Error::UnexpectedType);
             }
@@ -301,9 +305,10 @@ unsafe impl<T> ToLua for StackUd<T>
 where
     T: UserData,
 {
-    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
-        InnerLua::ensure_context_raw(self.state.ptr, ptr);
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) -> Result<(), Error> {
+        InnerLua::try_ensure_context_raw(self.state.ptr, ptr)?;
         unsafe { sys::lua_pushvalue(ptr, self.state.idx) }
+        Ok(())
     }
 }
 
@@ -311,9 +316,10 @@ unsafe impl<T> ToLua for &UdRef<T>
 where
     T: UserData,
 {
-    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
-        InnerLua::ensure_context_raw(self.state.lua.borrow().state(), ptr);
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) -> Result<(), Error> {
+        InnerLua::try_ensure_context_raw(self.state.lua.borrow().try_state()?, ptr)?;
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _) };
+        Ok(())
     }
 }
 
@@ -321,8 +327,8 @@ unsafe impl<T> ToLua for UdRef<T>
 where
     T: UserData,
 {
-    unsafe fn to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) {
-        unsafe { (&self).to_lua_unchecked(ptr) };
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) -> Result<(), Error> {
+        unsafe { (&self).try_to_lua_unchecked(ptr) }
     }
 }
 

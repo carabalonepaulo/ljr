@@ -60,6 +60,8 @@ pub enum Error {
     InsufficientStackValues(i32, i32),
     #[error("table is empty")]
     TableIsEmpty,
+    #[error("failed to create lua state, out of memory")]
+    StateAllocationFailed,
 }
 
 impl From<NulError> for Error {
