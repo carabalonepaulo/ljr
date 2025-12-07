@@ -52,6 +52,10 @@ pub enum Error {
     LuaStateClosed,
     #[error(transparent)]
     Utf8Error(#[from] Utf8Error),
+    #[error("wrong number of arguments, expecting {0}, got {1}")]
+    ArgumentCountMismatch(usize, usize),
+    #[error("invalid argument {0}, expected {0}")]
+    ArgumentTypeMismatch(usize, String),
 }
 
 impl From<NulError> for Error {

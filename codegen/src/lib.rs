@@ -147,7 +147,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
 
                                         if let Some(value) = #arg_opt {
                                             #arg_tmp = value;
-                                            #arg_final_value = Some(#arg_tmp.try_as_str().map_err(|e| e.to_string())?);
+                                            #arg_final_value = Some(#arg_tmp.try_as_str()?);
                                         }
 
                                         let #arg_name = #arg_final_value;
@@ -246,7 +246,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                                 #let_def #arg_name = ljr::lua::Lua::from_ptr(ptr);
                             });
                         } else if ty_name == "str" {
-                            call_args.push(quote_spanned! { arg_name.span() => #arg_name.try_as_str().map_err(|e| e.to_string())? });
+                            call_args.push(quote_spanned! { arg_name.span() => #arg_name.try_as_str()? });
                             borrow_steps.push(quote_spanned! { arg_ty.span() =>
                                 let #arg_name = ljr::helper::from_lua::<ljr::lstr::StackStr>(ptr, &mut idx, "&str")?;
                             });
