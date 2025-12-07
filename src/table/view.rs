@@ -1,7 +1,15 @@
 use std::{collections::HashMap, marker::PhantomData};
 
 use crate::{
-    Nil, error::Error, from_lua::FromLua, is_type::IsType, lua::ValueArg, sys, to_lua::ToLua,
+    Nil,
+    error::{Error, UnwrapDisplay},
+    from_lua::FromLua,
+    helper,
+    is_type::IsType,
+    lua::ValueArg,
+    stack_guard::StackGuard,
+    sys,
+    to_lua::ToLua,
 };
 
 const SHARED_REMOVE_KEY: usize = 0x6C6A72_01;
@@ -47,48 +55,84 @@ impl<'t> TableView<'t> {
         Self(ptr, idx, PhantomData)
     }
 
-    pub fn set<'a, K: ToLua, V: ToLua>(&mut self, key: K, value: V) {
+    pub fn try_set<'a, K: ToLua, V: ToLua>(&mut self, key: K, value: V) -> Result<(), Error> {
         const { assert!(K::LEN == 1 && V::LEN == 1) }
-        key.to_lua(self.0);
-        value.to_lua(self.0);
-        unsafe { sys::lua_settable(self.0, self.1) };
-    }
-
-    pub fn get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Option<V> {
-        const { assert!(K::LEN == 1 && V::LEN == 1) }
-        key.to_lua(self.0);
-        unsafe { sys::lua_gettable(self.0, self.1) };
-        let val = V::from_lua(self.0, -1);
-        unsafe { sys::lua_pop(self.0, 1) };
-        val
-    }
-
-    pub fn view<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(&self, key: K, f: F) -> Option<R> {
-        const { assert!(K::LEN == 1 && V::LEN == 1) }
-        key.to_lua(self.0);
-        unsafe { sys::lua_gettable(self.0, self.1) };
-        let value = V::from_lua(self.0, -1);
-        let result = if let Some(value) = value {
-            Some(f(&value))
-        } else {
-            None
+        unsafe {
+            helper::try_check_stack(self.0, 2)?;
+            key.to_lua_unchecked(self.0);
+            value.to_lua_unchecked(self.0);
+            sys::lua_settable(self.0, self.1)
         };
-        unsafe { sys::lua_pop(self.0, 1) };
-        result
+        Ok(())
     }
 
-    pub fn push<T: ToLua>(&mut self, value: T) {
+    #[inline]
+    pub fn set<'a, K: ToLua, V: ToLua>(&mut self, key: K, value: V) {
+        self.try_set(key, value).unwrap_display();
+    }
+
+    pub fn try_get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Result<Option<V>, Error> {
+        const { assert!(K::LEN == 1 && V::LEN == 1) }
+        unsafe {
+            key.try_to_lua(self.0)?;
+            sys::lua_gettable(self.0, self.1);
+            let val = V::from_lua(self.0, -1);
+            sys::lua_pop(self.0, 1);
+            Ok(val)
+        }
+    }
+
+    #[inline]
+    pub fn get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Option<V> {
+        self.try_get(key).unwrap_display()
+    }
+
+    pub fn try_view<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(
+        &self,
+        key: K,
+        f: F,
+    ) -> Result<Option<R>, Error> {
+        const { assert!(K::LEN == 1 && V::LEN == 1) }
+        unsafe {
+            helper::try_check_stack(self.0, 1)?;
+            let _g = StackGuard::new(self.0);
+            key.to_lua_unchecked(self.0);
+            sys::lua_gettable(self.0, self.1);
+            let value = V::from_lua(self.0, -1);
+            let result = if let Some(value) = value {
+                Some(f(&value))
+            } else {
+                None
+            };
+            Ok(result)
+        }
+    }
+
+    #[inline]
+    pub fn view<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(&self, key: K, f: F) -> Option<R> {
+        self.try_view(key, f).unwrap_display()
+    }
+
+    pub fn try_push<T: ToLua>(&mut self, value: T) -> Result<(), Error> {
         const { assert!(T::LEN == 1) }
-        value.to_lua(self.0);
+        value.try_to_lua(self.0)?;
         let len = unsafe { sys::lua_objlen(self.0, self.1) };
         unsafe { sys::lua_rawseti(self.0, self.1, (len + 1) as _) };
+        Ok(())
     }
 
-    pub fn pop<T: FromLua + ValueArg>(&mut self) -> Option<T> {
+    #[inline]
+    pub fn push<T: ToLua>(&mut self, value: T) {
+        self.try_push(value).unwrap_display();
+    }
+
+    pub fn try_pop<T: FromLua + ValueArg>(&mut self) -> Result<Option<T>, Error> {
         const { assert!(T::LEN == 1) }
+        unsafe { helper::try_check_stack(self.0, 1)? };
+
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         if len == 0 {
-            return None;
+            return Ok(None);
         }
 
         unsafe { sys::lua_rawgeti(self.0, self.1, len as _) };
@@ -100,14 +144,25 @@ impl<'t> TableView<'t> {
             sys::lua_rawseti(self.0, self.1, len as _);
         }
 
-        val
+        Ok(val)
     }
 
-    pub fn pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Option<R> {
+    #[inline]
+    pub fn pop<T: FromLua + ValueArg>(&mut self) -> Option<T> {
+        self.try_pop().unwrap_display()
+    }
+
+    pub fn try_pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(
+        &self,
+        f: F,
+    ) -> Result<Option<R>, Error> {
         const { assert!(T::LEN == 1) }
+        unsafe { helper::try_check_stack(self.0, self.1)? };
+        let _g = StackGuard::new(self.0);
+
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
         if len == 0 {
-            return None;
+            return Ok(None);
         }
 
         unsafe { sys::lua_rawgeti(self.0, self.1, len as _) };
@@ -124,15 +179,20 @@ impl<'t> TableView<'t> {
             None
         };
 
-        unsafe { sys::lua_pop(self.0, 1) };
-        result
+        Ok(result)
     }
 
-    pub fn clear(&mut self) {
+    #[inline]
+    pub fn pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Option<R> {
+        self.try_pop_then(f).unwrap_display()
+    }
+
+    pub fn try_clear(&mut self) -> Result<(), Error> {
         let ptr = self.0;
         let idx = self.1;
 
         unsafe {
+            helper::try_check_stack(ptr, 3)?;
             sys::lua_pushnil(ptr);
             while sys::lua_next(ptr, idx) != 0 {
                 sys::lua_pop(ptr, 1);
@@ -141,6 +201,13 @@ impl<'t> TableView<'t> {
                 sys::lua_settable(ptr, idx);
             }
         }
+
+        Ok(())
+    }
+
+    #[inline]
+    pub fn clear(&mut self) {
+        self.try_clear().unwrap_display()
     }
 
     pub fn len(&self) -> usize {
@@ -151,21 +218,17 @@ impl<'t> TableView<'t> {
         self.len() == 0
     }
 
-    pub fn insert(&mut self, index: i32, value: impl ToLua) {
-        self.try_insert(index, value)
-            .unwrap_or_else(|e| panic!("{}", e))
-    }
-
     pub fn try_insert(&mut self, index: i32, value: impl ToLua) -> Result<(), Error> {
         unsafe {
             let ptr = self.0;
             let t_idx = self.1;
             let key_addr = SHARED_INSERT_KEY as *mut std::ffi::c_void;
 
+            helper::try_check_stack(ptr, 4)?;
+            let _g = StackGuard::new(ptr);
             ensure_cached_func(ptr, key_addr, c"insert");
 
             if Nil::is_type(self.0, -1) {
-                sys::lua_pop(self.0, 1);
                 return Err(Error::MissingGlobal("table.insert".into()));
             }
 
@@ -174,44 +237,61 @@ impl<'t> TableView<'t> {
             value.to_lua_unchecked(ptr);
 
             if sys::lua_pcall(ptr, 3, 0, 0) != 0 {
-                let err = Error::from_stack(ptr, -1);
-                sys::lua_pop(ptr, 1);
-                Err(err)
+                Err(Error::from_stack(ptr, -1))
             } else {
                 Ok(())
             }
         }
     }
 
+    pub fn insert(&mut self, index: i32, value: impl ToLua) {
+        self.try_insert(index, value).unwrap_display()
+    }
+
+    pub fn try_remove_then<T: FromLua + IsType, F: FnOnce(&T) -> R, R>(
+        &mut self,
+        index: i32,
+        f: F,
+    ) -> Result<Option<R>, Error> {
+        unsafe {
+            helper::try_check_stack(self.0, 3)?;
+            let _g = StackGuard::new(self.0);
+            self.remove_impl::<T>(index)?;
+
+            let value = <T as FromLua>::from_lua(self.0, -1);
+            if let Some(value) = value {
+                Ok(Some(f(&value)))
+            } else {
+                Ok(None)
+            }
+        }
+    }
+
+    #[inline]
     pub fn remove_then<T: FromLua + IsType, F: FnOnce(&T) -> R, R>(
         &mut self,
         index: i32,
         f: F,
-    ) -> Result<R, Error> {
+    ) -> Option<R> {
+        self.try_remove_then(index, f).unwrap_display()
+    }
+
+    pub fn try_remove<T: FromLua + ValueArg + IsType>(
+        &mut self,
+        index: i32,
+    ) -> Result<Option<T>, Error> {
+        const { assert!(T::LEN == 1) }
         unsafe {
+            helper::try_check_stack(self.0, 3)?;
+            let _g = StackGuard::new(self.0);
             self.remove_impl::<T>(index)?;
-
-            let value = <T as FromLua>::from_lua(self.0, -1);
-            let result = if let Some(value) = value {
-                Some(f(&value))
-            } else {
-                None
-            };
-
-            sys::lua_pop(self.0, 1);
-            result.ok_or_else(|| Error::WrongReturnType)
+            Ok(<T as FromLua>::from_lua(self.0, -1))
         }
     }
 
-    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Result<T, Error> {
-        const { assert!(T::LEN == 1) }
-        unsafe {
-            self.remove_impl::<T>(index)?;
-
-            let val = <T as FromLua>::from_lua(self.0, -1);
-            sys::lua_pop(self.0, 1);
-            val.ok_or_else(|| Error::WrongReturnType)
-        }
+    #[inline]
+    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Option<T> {
+        self.try_remove(index).unwrap_display()
     }
 
     unsafe fn remove_impl<T: IsType>(&self, idx: i32) -> Result<(), Error> {
@@ -220,15 +300,11 @@ impl<'t> TableView<'t> {
 
             sys::lua_rawgeti(self.0, self.1, idx as _);
             if !<T as IsType>::is_type(self.0, -1) {
-                sys::lua_pop(self.0, 1);
                 return Err(Error::WrongReturnType);
             }
-            sys::lua_pop(self.0, 1);
 
             ensure_cached_func(self.0, key_addr, c"remove");
-
             if Nil::is_type(self.0, -1) {
-                sys::lua_pop(self.0, 1);
                 return Err(Error::MissingGlobal("table.remove".into()));
             }
 
@@ -236,22 +312,25 @@ impl<'t> TableView<'t> {
             sys::lua_pushinteger(self.0, idx as _);
 
             if sys::lua_pcall(self.0, 2, 1, 0) != 0 {
-                let err = Error::from_stack(self.0, -1);
-                sys::lua_pop(self.0, 1);
-                Err(err)
+                Err(Error::from_stack(self.0, -1))
             } else {
                 Ok(())
             }
         }
     }
 
-    pub fn contains_key<'a, K: ToLua>(&self, key: K) -> bool {
+    pub fn try_contains_key<'a, K: ToLua>(&self, key: K) -> Result<bool, Error> {
         const { assert!(K::LEN == 1) }
-        key.to_lua(self.0);
+        key.try_to_lua(self.0)?;
         unsafe { sys::lua_gettable(self.0, self.1) };
         let not_nil = unsafe { sys::lua_isnil(self.0, -1) == 0 };
         unsafe { sys::lua_pop(self.0, 1) };
-        not_nil
+        Ok(not_nil)
+    }
+
+    #[inline]
+    pub fn contains_key<'a, K: ToLua>(&self, key: K) -> bool {
+        self.try_contains_key(key).unwrap_display()
     }
 
     pub fn for_each<K, V, F>(&self, mut f: F)
@@ -263,6 +342,10 @@ impl<'t> TableView<'t> {
         const { assert!(K::LEN == 1 && V::LEN == 1) }
         let ptr = self.0;
         let t_idx = self.1;
+
+        if let Err(_) = unsafe { helper::try_check_stack(ptr, 2) } {
+            return;
+        }
 
         unsafe {
             sys::lua_pushnil(ptr);
@@ -306,6 +389,7 @@ impl<'t> TableView<'t> {
             started: false,
             finished: false,
             marker: PhantomData,
+            _guard: StackGuard::new(self.0),
         }
     }
 
@@ -356,6 +440,7 @@ pub struct Pairs<'t, 's, K, V> {
     started: bool,
     finished: bool,
     marker: PhantomData<(K, V)>,
+    _guard: StackGuard,
 }
 
 impl<'t, 's, K, V> Iterator for Pairs<'t, 's, K, V>
@@ -393,14 +478,6 @@ where
                     return Some((k, v));
                 }
             }
-        }
-    }
-}
-
-impl<'t, 's, K, V> Drop for Pairs<'t, 's, K, V> {
-    fn drop(&mut self) {
-        if self.started && !self.finished {
-            unsafe { sys::lua_pop(self.tref.0, 1) };
         }
     }
 }

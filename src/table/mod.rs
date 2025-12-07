@@ -73,7 +73,7 @@ impl TableAccess for BorrowedState {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct OwnedState {
     lua: RefCell<Rc<InnerLua>>,
     id: i32,
@@ -181,8 +181,18 @@ impl StackTable {
     }
 
     #[inline]
+    pub fn try_push(&mut self, value: impl ToLua) -> Result<(), Error> {
+        self.with_mut(|t| t.try_push(value))
+    }
+
+    #[inline]
     pub fn push(&mut self, value: impl ToLua) {
         self.with_mut(|t| t.push(value));
+    }
+
+    #[inline]
+    pub fn try_pop<T: FromLua + ValueArg>(&mut self) -> Result<Option<T>, Error> {
+        self.with_mut(|t| t.try_pop())
     }
 
     #[inline]
@@ -191,13 +201,35 @@ impl StackTable {
     }
 
     #[inline]
+    pub fn try_insert(&mut self, index: i32, value: impl ToLua) -> Result<(), Error> {
+        self.with_mut(|t| t.try_insert(index, value))
+    }
+
+    #[inline]
     pub fn insert(&mut self, index: i32, value: impl ToLua) {
         self.with_mut(|t| t.insert(index, value));
     }
 
     #[inline]
-    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Result<T, Error> {
+    pub fn try_remove<T: FromLua + ValueArg + IsType>(
+        &mut self,
+        index: i32,
+    ) -> Result<Option<T>, Error> {
+        self.with_mut(|t| t.try_remove(index))
+    }
+
+    #[inline]
+    pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Option<T> {
         self.with_mut(|t| t.remove(index))
+    }
+
+    #[inline]
+    pub fn try_remove_then<T: FromLua + IsType, F: FnOnce(&T) -> R, R>(
+        &mut self,
+        index: i32,
+        f: F,
+    ) -> Result<Option<R>, Error> {
+        self.with_mut(|t| t.try_remove_then(index, f))
     }
 
     #[inline]
@@ -205,13 +237,23 @@ impl StackTable {
         &mut self,
         index: i32,
         f: F,
-    ) -> Result<R, Error> {
+    ) -> Option<R> {
         self.with_mut(|t| t.remove_then(index, f))
+    }
+
+    #[inline]
+    pub fn try_contains_key<'a>(&self, key: impl ToLua) -> Result<bool, Error> {
+        self.with(|t| t.try_contains_key(key))
     }
 
     #[inline]
     pub fn contains_key<'a>(&self, key: impl ToLua) -> bool {
         self.with(|t| t.contains_key(key))
+    }
+
+    #[inline]
+    pub fn try_clear(&mut self) -> Result<(), Error> {
+        self.with_mut(|t| t.try_clear())
     }
 
     #[inline]
@@ -283,13 +325,25 @@ impl TableRef {
             }
         }
     }
+
+    pub fn try_clone(&self) -> Result<TableRef, Error> {
+        let lua = self.state.lua.clone();
+
+        let table_ptr = self.state.table_ptr;
+        let ptr = lua.borrow().try_state()?;
+        let id = unsafe {
+            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _);
+            sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX)
+        };
+
+        let state = OwnedState { id, lua, table_ptr };
+        Ok(Self { state })
+    }
 }
 
 impl Clone for TableRef {
     fn clone(&self) -> Self {
-        Self {
-            state: self.state.clone(),
-        }
+        self.try_clone().unwrap_display()
     }
 }
 

@@ -12,6 +12,9 @@ use crate::ud::StackUd;
 
 fn raise_error(ptr: *mut sys::lua_State, msg: String) -> ! {
     unsafe {
+        if sys::lua_checkstack(ptr, 1) == 0 {
+            sys::lua_pop(ptr, 1);
+        }
         sys::lua_pushlstring_(ptr, msg.as_ptr() as _, msg.len());
         std::mem::drop(msg);
     }

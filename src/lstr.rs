@@ -136,21 +136,25 @@ impl StrRef {
             }
         }
     }
-}
 
-impl Clone for StrRef {
-    fn clone(&self) -> Self {
+    pub fn try_clone(&self) -> Result<Self, Error> {
         let lua = self.state.lua.clone();
 
         let slice = self.state.slice;
-        let ptr = lua.borrow().state();
+        let ptr = lua.borrow().try_state()?;
         let id = unsafe {
             sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _);
             sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX)
         };
 
         let state = OwnedState { id, lua, slice };
-        Self { state }
+        Ok(Self { state })
+    }
+}
+
+impl Clone for StrRef {
+    fn clone(&self) -> Self {
+        self.try_clone().unwrap_display()
     }
 }
 

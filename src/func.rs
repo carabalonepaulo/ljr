@@ -7,7 +7,7 @@ use std::{
 
 use crate::{
     Borrowed, Mode, Owned,
-    error::Error,
+    error::{Error, UnwrapDisplay},
     from_lua::FromLua,
     helper,
     lua::{InnerLua, ValueArg},
@@ -23,65 +23,46 @@ pub trait FuncState<I, O> {
 }
 
 pub trait FuncAccess {
-    fn ptr(&self) -> *mut sys::lua_State;
+    fn try_ptr(&self) -> Result<*mut sys::lua_State, Error>;
 
     fn fn_ptr(&self) -> *const std::ffi::c_void;
 
     fn push_fn(&self, ptr: *mut sys::lua_State);
 
-    fn call<I: ToLua, O: FromLua + ValueArg>(&self, args: I) -> Result<O, Error> {
+    fn try_call<I: ToLua, O: FromLua + ValueArg>(&self, args: I) -> Result<Option<O>, Error> {
         unsafe {
-            let ptr = self.ptr();
+            let ptr = self.try_ptr()?;
             helper::try_check_stack(ptr, I::LEN + O::LEN)?;
             let _g = StackGuard::new(ptr);
 
             self.push_fn(ptr);
             args.to_lua_unchecked(ptr);
-            let o_len = <O as FromLua>::len();
 
-            if sys::lua_pcall(ptr, <I as ToLua>::len(), o_len, 0) != 0 {
-                if let Some(msg) = <String as FromLua>::from_lua(ptr, -1) {
-                    return Err(Error::LuaError(msg));
-                } else {
-                    return Err(Error::UnknownLuaError);
-                }
+            if sys::lua_pcall(ptr, I::LEN, O::LEN, 0) != 0 {
+                Err(Error::from_stack(ptr, -1))
             } else {
-                if let Some(value) = O::from_lua(ptr, o_len * -1) {
-                    Ok(value)
-                } else {
-                    Err(Error::WrongReturnType)
-                }
+                Ok(O::from_lua(ptr, O::LEN * -1))
             }
         }
     }
 
-    fn call_then<I: ToLua, O: FromLua, F: FnOnce(&O) -> R, R>(
+    fn try_call_then<I: ToLua, O: FromLua, F: FnOnce(&O) -> R, R>(
         &self,
         args: I,
         f: F,
-    ) -> Result<R, Error> {
+    ) -> Result<Option<R>, Error> {
         unsafe {
-            let ptr = self.ptr();
+            let ptr = self.try_ptr()?;
             helper::try_check_stack(ptr, I::LEN + O::LEN)?;
             let _g = StackGuard::new(ptr);
 
             self.push_fn(ptr);
             args.to_lua_unchecked(ptr);
-            let o_len = <O as FromLua>::len();
 
-            if sys::lua_pcall(ptr, <I as ToLua>::len(), o_len, 0) != 0 {
-                if let Some(msg) = <String as FromLua>::from_lua(ptr, -1) {
-                    return Err(Error::LuaError(msg));
-                } else {
-                    return Err(Error::UnknownLuaError);
-                }
+            if sys::lua_pcall(ptr, I::LEN, O::LEN, 0) != 0 {
+                Err(Error::from_stack(ptr, -1))
             } else {
-                let value = O::from_lua(ptr, o_len * -1);
-                if let Some(val) = value {
-                    Ok(f(&val))
-                } else {
-                    Err(Error::WrongReturnType)
-                }
+                Ok(O::from_lua(ptr, O::LEN * -1).map(|v| f(&v)))
             }
         }
     }
@@ -111,15 +92,15 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn ptr(&self) -> *mut mlua_sys::lua_State {
-        self.ptr
+    fn try_ptr(&self) -> Result<*mut sys::lua_State, Error> {
+        Ok(self.ptr)
     }
 
     fn fn_ptr(&self) -> *const std::ffi::c_void {
         self.fn_ptr
     }
 
-    fn push_fn(&self, ptr: *mut mlua_sys::lua_State) {
+    fn push_fn(&self, ptr: *mut sys::lua_State) {
         unsafe { sys::lua_pushvalue(ptr, self.idx) };
     }
 }
@@ -161,15 +142,15 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn ptr(&self) -> *mut mlua_sys::lua_State {
-        self.lua.borrow().state()
+    fn try_ptr(&self) -> Result<*mut sys::lua_State, Error> {
+        self.lua.borrow().try_state()
     }
 
     fn fn_ptr(&self) -> *const std::ffi::c_void {
         self.fn_ptr
     }
 
-    fn push_fn(&self, ptr: *mut mlua_sys::lua_State) {
+    fn push_fn(&self, ptr: *mut sys::lua_State) {
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.id as _) };
     }
 }
@@ -194,15 +175,50 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    pub fn call(&self, args: I) -> Result<O, Error>
+    pub fn try_call(&self, args: I) -> Result<Option<O>, Error>
     where
         O: ValueArg,
     {
-        self.state.call(args)
+        self.state.try_call(args)
     }
 
-    pub fn call_then<F: FnOnce(&O) -> R, R>(&self, args: I, f: F) -> Result<R, Error> {
-        self.state.call_then(args, f)
+    pub fn call(&self, args: I) -> Option<O>
+    where
+        O: ValueArg,
+    {
+        self.try_call(args).unwrap_display()
+    }
+
+    pub fn try_call_then<F: FnOnce(&O) -> R, R>(&self, args: I, f: F) -> Result<Option<R>, Error> {
+        self.state.try_call_then(args, f)
+    }
+
+    pub fn call_then<F: FnOnce(&O) -> R, R>(&self, args: I, f: F) -> Option<R> {
+        self.try_call_then(args, f).unwrap_display()
+    }
+}
+
+impl<I, O> FnRef<I, O>
+where
+    I: FromLua + ToLua,
+    O: FromLua + ToLua,
+{
+    fn try_clone(&self) -> Result<Self, Error> {
+        let lua = self.state.lua.clone();
+        let fn_ptr = self.state.fn_ptr;
+        let id = unsafe {
+            let ptr = lua.borrow().try_state()?;
+            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _);
+            sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX)
+        };
+        Ok(Self {
+            state: OwnedState {
+                lua,
+                id,
+                fn_ptr,
+                marker: PhantomData,
+            },
+        })
     }
 }
 
@@ -212,21 +228,7 @@ where
     O: FromLua + ToLua,
 {
     fn clone(&self) -> Self {
-        let lua = self.state.lua.clone();
-        let fn_ptr = self.state.fn_ptr;
-        let id = unsafe {
-            let ptr = lua.borrow().state();
-            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _);
-            sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX)
-        };
-        Self {
-            state: OwnedState {
-                lua,
-                id,
-                fn_ptr,
-                marker: PhantomData,
-            },
-        }
+        self.try_clone().unwrap_display()
     }
 }
 
@@ -260,7 +262,7 @@ where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Option<Self> {
+    fn from_lua(ptr: *mut sys::lua_State, idx: i32) -> Option<Self> {
         unsafe {
             let idx = sys::lua_absindex(ptr, idx);
             if sys::lua_isfunction(ptr, idx) != 0 {

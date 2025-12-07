@@ -5,8 +5,15 @@ use std::{
 };
 
 use crate::{
-    Borrowed, Mode, Owned, UserData, from_lua::FromLua, is_type::IsType, lua::InnerLua,
-    owned_value::LuaInnerHandle, prelude::OwnedValue, sys, to_lua::ToLua,
+    Borrowed, Mode, Owned, UserData,
+    error::{Error, UnwrapDisplay},
+    from_lua::FromLua,
+    is_type::IsType,
+    lua::InnerLua,
+    owned_value::LuaInnerHandle,
+    prelude::OwnedValue,
+    sys,
+    to_lua::ToLua,
 };
 
 pub trait UserDataState<T> {
@@ -150,24 +157,31 @@ where
 
 impl<T> StackUd<T> where T: UserData {}
 
-impl<T> UdRef<T> where T: UserData {}
+impl<T> UdRef<T>
+where
+    T: UserData,
+{
+    pub fn try_clone(&self) -> Result<Self, Error> {
+        let lua = self.state.lua.clone();
+        let ud_ptr = self.state.ud_ptr;
+        let id = unsafe {
+            let ptr = lua.borrow().try_state()?;
+            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _);
+            sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX)
+        };
+
+        Ok(Self {
+            state: OwnedState { lua, id, ud_ptr },
+        })
+    }
+}
 
 impl<T> Clone for UdRef<T>
 where
     T: UserData,
 {
     fn clone(&self) -> Self {
-        let lua = self.state.lua.clone();
-        let ud_ptr = self.state.ud_ptr;
-        let id = unsafe {
-            let ptr = lua.borrow().state();
-            sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _);
-            sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX)
-        };
-
-        Self {
-            state: OwnedState { lua, id, ud_ptr },
-        }
+        self.try_clone().unwrap_display()
     }
 }
 

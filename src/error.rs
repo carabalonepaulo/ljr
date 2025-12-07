@@ -60,10 +60,8 @@ impl From<NulError> for Error {
 impl Error {
     pub(crate) unsafe fn from_stack(ptr: *mut crate::sys::lua_State, idx: i32) -> Error {
         if let Some(msg) = <String as crate::from_lua::FromLua>::from_lua(ptr, idx) {
-            unsafe { crate::sys::lua_pop(ptr, 1) };
             return Error::LuaError(msg);
         } else {
-            unsafe { crate::sys::lua_pop(ptr, 1) };
             return Error::UnknownLuaError;
         }
     }
