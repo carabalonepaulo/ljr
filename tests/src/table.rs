@@ -310,7 +310,7 @@ fn test_table_get_with_str_ref_optimization() {
     });
 
     table.with(|t| {
-        let len = t.view("msg", |s: &StackStr| s.as_str().unwrap_or("").len());
+        let len = t.view("msg", |s: &StackStr| s.as_str().len());
         assert_eq!(len, Some(11));
     });
 
@@ -456,8 +456,8 @@ fn test_table_for_each_nested_str_ref() {
 
     table.with(|t| {
         t.for_each(|k: &StackStr, v: &StackStr| {
-            total_len += k.as_str().unwrap().len();
-            total_len += v.as_str().unwrap().len();
+            total_len += k.as_str().len();
+            total_len += v.as_str().len();
             true
         });
     });
@@ -855,7 +855,7 @@ fn test_remove_then_borrowed_string() {
 
     let length_of_removed = table.with_mut(|t| {
         t.try_remove_then(2, |s: &StackStr| {
-            let str_slice = s.as_str().unwrap();
+            let str_slice = s.as_str();
             assert_eq!(str_slice, "segundo");
             str_slice.len()
         })

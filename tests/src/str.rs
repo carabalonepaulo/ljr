@@ -9,7 +9,7 @@ fn test_str() {
     let value = lua.create_str("hello world");
     lua.with_globals_mut(|g| g.set("global_str", value.clone()));
 
-    assert_eq!(value.as_str(), Some("hello world"));
+    assert_eq!(value.as_str(), "hello world");
 
     let ok = lua
         .do_string::<bool>("return global_str == 'hello world'")
@@ -28,7 +28,7 @@ fn test_str_ref_as_arg() {
     #[user_data]
     impl Test {
         fn greet(lua: &Lua, name: StrRef) -> StrRef {
-            lua.create_str(format!("hello {}", name.as_str().unwrap()).as_str())
+            lua.create_str(format!("hello {}", name.as_str()).as_str())
         }
     }
 

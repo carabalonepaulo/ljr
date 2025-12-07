@@ -20,10 +20,16 @@ pub trait StringState {
 }
 
 pub trait StringAccess {
-    fn as_slice<'a>(&'a self) -> &'a [u8];
+    fn try_as_slice<'a>(&'a self) -> Result<&'a [u8], Error>;
 
-    fn as_str<'a>(&'a self) -> Option<&'a str> {
-        str::from_utf8(self.as_slice()).ok()
+    #[inline]
+    fn as_slice<'a>(&'a self) -> &'a [u8] {
+        self.try_as_slice().unwrap_display()
+    }
+
+    #[inline]
+    fn try_as_str<'a>(&'a self) -> Result<&'a str, Error> {
+        Ok(str::from_utf8(self.as_slice())?)
     }
 }
 
@@ -38,8 +44,9 @@ impl StringState for Borrowed {
 }
 
 impl StringAccess for BorrowedState {
-    fn as_slice<'a>(&'a self) -> &'a [u8] {
-        self.slice
+    #[inline]
+    fn try_as_slice<'a>(&'a self) -> Result<&'a [u8], Error> {
+        Ok(self.slice)
     }
 }
 
@@ -63,9 +70,9 @@ impl StringState for Owned {
 }
 
 impl StringAccess for OwnedState {
-    fn as_slice<'a>(&'a self) -> &'a [u8] {
-        let _ = self.lua.borrow().state();
-        self.slice
+    fn try_as_slice<'a>(&'a self) -> Result<&'a [u8], Error> {
+        let _ = self.lua.borrow().try_state()?;
+        Ok(self.slice)
     }
 }
 
@@ -85,12 +92,24 @@ where
     M: Mode + StringState,
     M::State: StringAccess,
 {
+    #[inline]
+    pub fn try_as_slice<'a>(&'a self) -> Result<&'a [u8], Error> {
+        self.state.try_as_slice()
+    }
+
+    #[inline]
     pub fn as_slice<'a>(&'a self) -> &'a [u8] {
         self.state.as_slice()
     }
 
-    pub fn as_str<'a>(&'a self) -> Option<&'a str> {
-        self.state.as_str()
+    #[inline]
+    pub fn try_as_str<'a>(&'a self) -> Result<&'a str, Error> {
+        self.state.try_as_str()
+    }
+
+    #[inline]
+    pub fn as_str<'a>(&'a self) -> &'a str {
+        self.state.try_as_str().unwrap_display()
     }
 }
 
@@ -103,6 +122,7 @@ impl StackStr {
         }
     }
 
+    #[inline]
     pub fn to_owned(&self) -> StrRef {
         StrRef::from_stack(self.state.ptr, self.state.idx)
     }
@@ -120,6 +140,7 @@ impl StrRef {
         })
     }
 
+    #[inline]
     pub fn new(lua: Rc<InnerLua>, value: &str) -> StrRef {
         Self::try_new(lua, value).unwrap_display()
     }
@@ -153,6 +174,7 @@ impl StrRef {
 }
 
 impl Clone for StrRef {
+    #[inline]
     fn clone(&self) -> Self {
         self.try_clone().unwrap_display()
     }

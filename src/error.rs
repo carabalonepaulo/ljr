@@ -2,6 +2,7 @@ use std::{
     cell::{BorrowError, BorrowMutError},
     ffi::NulError,
     fmt::Display,
+    str::Utf8Error,
 };
 
 pub const STACK_OVERFLOW_ERR: &'static str = "cannot grow Lua stack to required size";
@@ -49,6 +50,8 @@ pub enum Error {
     StackCapacityExceeded,
     #[error("lua state has been closed")]
     LuaStateClosed,
+    #[error(transparent)]
+    Utf8Error(#[from] Utf8Error),
 }
 
 impl From<NulError> for Error {

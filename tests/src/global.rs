@@ -43,7 +43,7 @@ fn test_globals_read_write_separation() {
         assert_eq!(t.get("inteiro"), Some(42i32));
         assert_eq!(t.get("flutuante"), Some(3.14f64));
 
-        let len = t.view("texto", |s: &StackStr| s.as_str().unwrap().len());
+        let len = t.view("texto", |s: &StackStr| s.as_str().len());
         assert_eq!(len, Some(4));
     });
 

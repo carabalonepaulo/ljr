@@ -224,8 +224,7 @@ fn test_callback_with_str_ref_return() {
     #[user_data]
     impl Runner {
         fn len(cb: &StackFn<(), StackStr>) -> i32 {
-            cb.call_then((), |s| s.as_str().unwrap_or("").len() as i32)
-                .unwrap_or(-1)
+            cb.call_then((), |s| s.as_str().len() as i32).unwrap_or(-1)
         }
     }
 

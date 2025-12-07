@@ -27,7 +27,7 @@ pub fn call_fn_string_borrowed() {
     let code = "return function() return string.rep('a', 200) end";
     lua.do_string_with(code, |f: &StackFn<(), StackStr>| {
         for _ in 0..1000 {
-            std::hint::black_box(f.call_then((), |s| s.as_str().unwrap().len()).unwrap());
+            std::hint::black_box(f.call_then((), |s| s.as_str().len()).unwrap());
         }
     })
     .unwrap();
@@ -42,7 +42,7 @@ pub fn call_fn_string_owned() {
         .unwrap();
 
     for _ in 0..1000 {
-        std::hint::black_box(func.call_then((), |s| s.as_str().unwrap().len()).unwrap());
+        std::hint::black_box(func.call_then((), |s| s.as_str().len()).unwrap());
     }
 }
 

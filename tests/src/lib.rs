@@ -81,7 +81,7 @@ fn test_do_string_error() {
 fn test_do_string_with_borrowed_str() {
     let mut lua = Lua::new();
     lua.do_string_with("return 'hello world'", |s: &StackStr| {
-        assert!(s.as_str().unwrap() == "hello world");
+        assert!(s.as_str() == "hello world");
     })
     .unwrap();
     assert_eq!(lua.top(), 0);
