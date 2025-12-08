@@ -293,7 +293,8 @@ fn test_table_pop_with_userdata_side_effects() {
     });
     assert_eq!(table.with(|t| t.len()), 1);
 
-    let extracted_value = table.with_mut(|t| t.pop_then(|u: &StackUd<Counter>| u.as_ref().get()));
+    let extracted_value =
+        table.with_mut(|t| t.pop_then(|u: &StackUd<Counter>| u.with(|u| u.get())));
     assert_eq!(extracted_value, Some(42));
     assert_eq!(table.with(|t| t.len()), 0);
     assert_eq!(lua.top(), 0);
@@ -505,7 +506,7 @@ fn test_table_for_each_with_userdata_borrow() {
     let mut sum = 0;
     table.with(|t| {
         t.for_each(|_: &i32, v: &StackUd<Item>| {
-            sum += v.as_ref().get();
+            sum += v.with(|v| v.get());
             true
         });
     });
@@ -824,7 +825,7 @@ fn test_remove_returns_ud() {
 
     table.with_mut(|t| {
         let ud = t.remove::<UdRef<Item>>(2).expect("Should return userdata");
-        assert_eq!(ud.as_ref().get(), 200);
+        assert_eq!(ud.with(|v| v.get()), 200);
     });
 
     assert_eq!(table.with(|t| t.len()), 2);
@@ -832,7 +833,7 @@ fn test_remove_returns_ud() {
     let sum = table.with(|t| {
         let mut s = 0;
         t.for_each::<i32, StackUd<Item>, _>(|_, item| {
-            s += item.as_ref().get();
+            s += item.with(|i| i.get());
             true
         });
         s

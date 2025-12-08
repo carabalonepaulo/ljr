@@ -316,7 +316,9 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                 name: #method_name.as_ptr() as _,
                 func: {
                     unsafe extern "C-unwind" fn trampoline(ptr: *mut ljr::sys::lua_State) -> std::ffi::c_int {
-                        #final_block
+                        unsafe {
+                            #final_block
+                        }
                     }
                     trampoline
                 }
@@ -350,10 +352,12 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
         ];
 
         impl ljr::UserData for #ud_ty {
+            #[inline(always)]
             fn name() -> *const i8 {
                 concat!(env!("CARGO_PKG_NAME"), "_", stringify!(#ud_ty), "\0").as_ptr() as _
             }
 
+            #[inline(always)]
             fn functions() -> &'static [ljr::sys::luaL_Reg] {
                 unsafe { &*(&#regs_ident as *const [ljr::SyncLuaReg; #regs_count] as *const [ljr::sys::luaL_Reg; #regs_count]) }
             }

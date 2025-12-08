@@ -20,14 +20,14 @@ fn test_reentrancy() {
         }
 
         fn pass_stack(a: &mut StackUd<Test>, b: &StackUd<Test>) -> i32 {
-            let va = { (&mut *a.as_mut()).value };
-            let vb = { (&*b.as_ref()).value };
+            let va = a.with_mut(|a| a.value);
+            let vb = b.with(|b| b.value);
             va + vb
         }
 
-        fn pass_ref(a: UdRef<Test>, b: UdRef<Test>) -> i32 {
-            let va = { (&mut *a.as_mut()).value };
-            let vb = { (&*b.as_ref()).value };
+        fn pass_ref(mut a: UdRef<Test>, b: UdRef<Test>) -> i32 {
+            let va = a.with_mut(|a| a.value);
+            let vb = b.with(|b| b.value);
             va + vb
         }
     }
@@ -93,13 +93,11 @@ fn test_callback_reentrancy() {
 
         fn safe_run(ud: &mut StackUd<System>, callback: &StackFn<(), ()>) {
             {
-                let mut guard = ud.as_mut();
-                guard.state = "running".to_string();
+                ud.with_mut(|v| v.state = "running".to_string());
             }
             callback.call(()).unwrap();
             {
-                let mut guard = ud.as_mut();
-                guard.state = "finished".to_string();
+                ud.with_mut(|v| v.state = "finished".to_string());
             }
         }
     }

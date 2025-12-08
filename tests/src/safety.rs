@@ -49,7 +49,10 @@ fn test_ud_access_after_vm_close_panics_safely() {
     }
 
     let ud = unsafe { setup_and_kill_vm(|lua| lua.create_ref(Test)) };
-    assert!(matches!(ud.try_as_ref(), Err(Error::LuaStateClosed)));
+    assert!(matches!(
+        unsafe { ud.try_as_ref() },
+        Err(Error::LuaStateClosed)
+    ));
 }
 
 #[test]

@@ -193,7 +193,7 @@ fn test_callback_with_stack_ud_return() {
     impl Runner {
         fn execute(callback: &StackFn<(), StackUd<Item>>) -> i32 {
             callback
-                .call_then((), |item| item.as_ref().get())
+                .call_then((), |item| item.with(|i| i.get()))
                 .unwrap_or(-1)
         }
     }
@@ -321,7 +321,7 @@ fn test_integration_table_iter_func_call_with_stack_ud() {
     table.with(|t| {
         t.for_each(|_k: &i32, func: &StackFn<(), StackUd<Item>>| {
             let val = func
-                .call_then((), |item_ud: &StackUd<Item>| item_ud.as_ref().get())
+                .call_then((), |item_ud: &StackUd<Item>| item_ud.with(|i| i.get()))
                 .unwrap_or(0);
             total += val;
             true

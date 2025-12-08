@@ -154,22 +154,22 @@ where
     M::State: UserDataAccess<T>,
 {
     #[inline]
-    pub fn try_as_ref(&self) -> Result<Ref<'_, T>, Error> {
+    pub unsafe fn try_as_ref(&self) -> Result<Ref<'_, T>, Error> {
         self.state.try_as_ref()
     }
 
     #[inline]
-    pub fn as_ref(&self) -> Ref<'_, T> {
+    pub unsafe fn as_ref(&self) -> Ref<'_, T> {
         self.state.as_ref()
     }
 
     #[inline]
-    pub fn try_as_mut(&self) -> Result<RefMut<'_, T>, Error> {
+    pub unsafe fn try_as_mut(&self) -> Result<RefMut<'_, T>, Error> {
         self.state.try_as_mut()
     }
 
     #[inline]
-    pub fn as_mut(&self) -> RefMut<'_, T> {
+    pub unsafe fn as_mut(&self) -> RefMut<'_, T> {
         self.state.as_mut()
     }
 
