@@ -49,10 +49,7 @@ fn test_ud_access_after_vm_close_panics_safely() {
     }
 
     let ud = unsafe { setup_and_kill_vm(|lua| lua.create_ref(Test)) };
-    assert!(matches!(
-        unsafe { ud.try_as_ref() },
-        Err(Error::LuaStateClosed)
-    ));
+    assert!(matches!(ud.try_as_ref(), Err(Error::LuaStateClosed)));
 }
 
 #[test]
@@ -76,4 +73,28 @@ fn test_str_ref_access_after_vm_close_panics_safely() {
 fn test_owned_lua_drop_behavior() {
     let t2 = unsafe { setup_and_kill_vm(|lua| lua.create_table()) };
     drop(t2);
+}
+
+#[test]
+fn test_no_uaf() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct Test {
+        value: i32,
+    }
+
+    #[user_data]
+    impl Test {
+        fn sum(&self, a: i32, b: i32) -> i32 {
+            self.value + a + b
+        }
+    }
+
+    lua.with_globals_mut(|g| g.set("test", Test { value: 10 }));
+    let ud: UdRef<Test> = lua.with_globals(|g| g.get("test")).unwrap();
+    let ud_ref = ud.as_ref();
+    std::mem::drop(lua);
+
+    assert_eq!(ud_ref.sum(1, 2), 13);
 }

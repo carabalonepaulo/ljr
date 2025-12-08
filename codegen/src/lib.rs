@@ -316,9 +316,7 @@ pub fn generate_user_data(_attr: TokenStream, item: TokenStream) -> TokenStream 
                 name: #method_name.as_ptr() as _,
                 func: {
                     unsafe extern "C-unwind" fn trampoline(ptr: *mut ljr::sys::lua_State) -> std::ffi::c_int {
-                        unsafe {
-                            #final_block
-                        }
+                        #final_block
                     }
                     trampoline
                 }
