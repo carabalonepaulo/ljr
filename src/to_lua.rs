@@ -203,34 +203,28 @@ unsafe impl ToLua for () {
 unsafe impl<T, E> ToLua for Result<T, E>
 where
     T: ToLua,
-    E: ToLua,
+    E: std::fmt::Display,
 {
+    const LEN: i32 = T::LEN + <String as ToLua>::LEN;
+
     unsafe fn try_to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) -> Result<(), Error> {
         let g = StackGuard::new(ptr);
 
         match self {
             Ok(value) => {
                 unsafe { value.try_to_lua_unchecked(ptr)? };
-
-                for _ in 0..E::len() {
-                    unsafe { sys::lua_pushnil(ptr) };
-                }
+                unsafe { sys::lua_pushnil(ptr) };
             }
             Err(e) => {
                 for _ in 0..T::len() {
                     unsafe { sys::lua_pushnil(ptr) };
                 }
-
-                unsafe { e.try_to_lua_unchecked(ptr)? };
+                unsafe { e.to_string().try_to_lua_unchecked(ptr)? }
             }
         }
 
         g.commit();
         Ok(())
-    }
-
-    fn len() -> i32 {
-        T::len() + E::len()
     }
 }
 

@@ -116,10 +116,7 @@ fn test_callback_reentrancy() {
         let result = lua.exec(
             r#"
             local sys = require 'sys'
-            sys:unsafe_run(function()
-                local s = sys:get_state()
-                print(s)
-            end)
+            sys:unsafe_run(function() sys:get_state() end)
             "#,
         );
         let _ = redirect.into_inner();
@@ -147,4 +144,43 @@ fn test_callback_reentrancy() {
         assert!(matches!(result, Ok(ref s) if s == "finished"));
         assert_eq!(lua.top(), 0);
     }
+}
+
+#[test]
+fn test_callback_reentrancy_with_result() {
+    let mut lua = Lua::new();
+    lua.open_libs();
+
+    struct System {
+        state: String,
+    }
+
+    #[user_data]
+    impl System {
+        fn get_state(&self) -> String {
+            self.state.clone()
+        }
+
+        fn unsafe_run(&mut self, callback: &StackFn<(), ()>) -> Result<(), Error> {
+            self.state = "running".to_string();
+            callback.call(())
+        }
+    }
+
+    lua.register(
+        "sys",
+        System {
+            state: "idle".to_string(),
+        },
+    );
+
+    let result = lua.do_string::<bool>(
+        r#"
+        local sys = require 'sys'
+        local err = sys:unsafe_run(function() sys:get_state() end)
+        return err == 'lua error: cannot modify value state: it is currently borrowed/in use'
+        "#,
+    );
+    assert!(matches!(result, Ok(true)));
+    assert_eq!(lua.top(), 0);
 }
