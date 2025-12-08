@@ -6,8 +6,6 @@ use crate::STDERR_LOCK;
 
 #[test]
 fn test_reentrancy() {
-    let _guard = STDERR_LOCK.lock().unwrap();
-
     let mut lua = Lua::new();
     lua.open_libs();
 
@@ -37,14 +35,12 @@ fn test_reentrancy() {
     lua.register("test", Test { value: 10 });
 
     {
-        let redirect = gag::BufferRedirect::stderr().unwrap();
         let result = lua.do_string::<bool>(
             r#"
             local test = require 'test'
             return test:fail(test) == 20
             "#,
         );
-        let _ = redirect.into_inner();
         let expected_msg = "cannot modify value";
         assert!(matches!(result, Err(Error::LuaError(ref msg)) if msg.contains(expected_msg)));
         assert_eq!(lua.top(), 0);
