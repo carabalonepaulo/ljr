@@ -1,4 +1,4 @@
-use crate::{error::Error, lstr::StackStr, lua::ValueArg, sys};
+use crate::{Nil, error::Error, lstr::StackStr, lua::ValueArg, sys};
 use macros::generate_from_lua_tuple_impl;
 
 pub unsafe trait FromLua: Sized {
@@ -90,6 +90,19 @@ unsafe impl FromLua for () {
 
     fn try_from_lua(_: *mut crate::sys::lua_State, _: i32) -> Result<Self, Error> {
         Ok(())
+    }
+}
+
+unsafe impl FromLua for Nil {
+    const LEN: i32 = 1;
+
+    fn try_from_lua(ptr: *mut crate::sys::lua_State, idx: i32) -> Result<Self, Error> {
+        // panic!("{}", unsafe { sys::lua_type(ptr, idx) });
+        if unsafe { sys::lua_type(ptr, idx) == sys::LUA_TNIL } {
+            Ok(Nil)
+        } else {
+            Err(Error::UnexpectedType)
+        }
     }
 }
 

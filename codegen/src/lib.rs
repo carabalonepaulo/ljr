@@ -9,7 +9,7 @@ use venial::{FnParam, parse_item};
 
 use crate::type_info::{Ref, TypeInfo};
 
-const SPECIAL_TYPES: [&'static str; 8] = ["StackStr", "StackFn", "StackTable", "StackUd", "LStr<Borrowed>", "Func<Borrowed", "Table<Borrowed>", "Ud<Borrowed"];
+const SPECIAL_TYPES: [&'static str; 10] = ["StackStr", "StackFn", "StackTable", "StackUd", "StackValue", "LStr<Borrowed>", "Func<Borrowed", "Table<Borrowed>", "Ud<Borrowed", "Value<Borrowed>"];
 
 fn string_to_cstr_lit(value: String) -> TokenStream {
     let buf = value.as_bytes();

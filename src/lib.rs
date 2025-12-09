@@ -7,6 +7,7 @@ pub mod func;
 pub mod lstr;
 pub mod table;
 pub mod ud;
+pub mod value;
 
 pub mod from_lua;
 pub mod is_type;
@@ -27,6 +28,7 @@ pub struct Coroutine;
 
 pub struct LightUserData;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Nil;
 
 pub trait UserData {
@@ -35,15 +37,17 @@ pub trait UserData {
 }
 
 pub mod prelude {
+    pub use crate::Nil;
     pub use crate::UserData;
     pub use crate::create_table;
-    pub use crate::error::Error;
+    pub use crate::error::{Error, UnwrapDisplay};
     pub use crate::func::{FnRef, StackFn};
     pub use crate::lstr::{StackStr, StrRef};
     pub use crate::lua::Lua;
     pub use crate::owned_value::OwnedValue;
     pub use crate::table::{StackTable, TableRef, builder::TableBuilder, view::TableView};
     pub use crate::ud::{StackUd, UdRef};
+    pub use crate::value::StackValue;
     pub use macros::{module, user_data};
 }
 

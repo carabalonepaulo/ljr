@@ -6,6 +6,7 @@ mod result;
 mod safety;
 mod str;
 mod table;
+mod value;
 
 #[cfg(test)]
 use ljr::prelude::*;

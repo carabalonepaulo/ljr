@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 
 use crate::{
+    Nil,
     error::{Error, UnwrapDisplay},
     stack_guard::StackGuard,
     sys,
@@ -180,14 +181,14 @@ where
 }
 
 unsafe impl ToLua for &[u8] {
-    unsafe fn try_to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) -> Result<(), Error> {
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
         unsafe { sys::lua_pushlstring(ptr, self.as_ptr() as *const i8, self.len()) };
         Ok(())
     }
 }
 
 unsafe impl ToLua for Vec<u8> {
-    unsafe fn try_to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) -> Result<(), Error> {
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
         unsafe { (self.as_ref() as &[u8]).try_to_lua_unchecked(ptr) }
     }
 }
@@ -195,8 +196,16 @@ unsafe impl ToLua for Vec<u8> {
 unsafe impl ToLua for () {
     const LEN: i32 = 0;
 
-    unsafe fn try_to_lua_unchecked(self, _: *mut mlua_sys::lua_State) -> Result<(), Error> {
+    unsafe fn try_to_lua_unchecked(self, _: *mut sys::lua_State) -> Result<(), Error> {
         Ok(())
+    }
+}
+
+unsafe impl ToLua for Nil {
+    const LEN: i32 = 1;
+
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
+        Ok(unsafe { sys::lua_pushnil(ptr) })
     }
 }
 
@@ -207,7 +216,7 @@ where
 {
     const LEN: i32 = T::LEN + <String as ToLua>::LEN;
 
-    unsafe fn try_to_lua_unchecked(self, ptr: *mut mlua_sys::lua_State) -> Result<(), Error> {
+    unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
         let g = StackGuard::new(ptr);
 
         match self {

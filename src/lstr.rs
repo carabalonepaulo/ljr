@@ -114,17 +114,14 @@ where
 }
 
 impl StackStr {
-    pub fn from_stack(ptr: *mut sys::lua_State, idx: i32) -> StackStr {
-        let idx = unsafe { sys::lua_absindex(ptr, idx) };
-        let slice = slice_from_stack(ptr, idx);
-        Self {
-            state: BorrowedState { ptr, idx, slice },
-        }
+    #[inline(always)]
+    pub fn try_to_owned(&self) -> Result<StrRef, Error> {
+        StrRef::try_from_lua(self.state.ptr, self.state.idx)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn to_owned(&self) -> StrRef {
-        StrRef::from_stack(self.state.ptr, self.state.idx)
+        self.try_to_owned().unwrap_display()
     }
 }
 
@@ -143,19 +140,6 @@ impl StrRef {
     #[inline]
     pub fn new(lua: Rc<InnerLua>, value: &str) -> StrRef {
         Self::try_new(lua, value).unwrap_display()
-    }
-
-    pub fn from_stack(ptr: *mut sys::lua_State, idx: i32) -> StrRef {
-        unsafe {
-            let lua = RefCell::new(InnerLua::from_ptr(ptr));
-            sys::lua_pushvalue(ptr, idx);
-            let slice = slice_from_stack(ptr, -1);
-            let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
-
-            Self {
-                state: OwnedState { lua, id, slice },
-            }
-        }
     }
 
     pub fn try_clone(&self) -> Result<Self, Error> {
@@ -239,7 +223,11 @@ where
 unsafe impl FromLua for StackStr {
     fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<StackStr, Error> {
         if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
-            Ok(StackStr::from_stack(ptr, idx))
+            let idx = unsafe { sys::lua_absindex(ptr, idx) };
+            let slice = slice_from_stack(ptr, idx);
+            Ok(Self {
+                state: BorrowedState { ptr, idx, slice },
+            })
         } else {
             Err(Error::UnexpectedType)
         }
@@ -248,10 +236,19 @@ unsafe impl FromLua for StackStr {
 
 unsafe impl FromLua for StrRef {
     fn try_from_lua(ptr: *mut mlua_sys::lua_State, idx: i32) -> Result<Self, Error> {
-        if unsafe { sys::lua_type(ptr, idx) } == sys::LUA_TSTRING as i32 {
-            Ok(StrRef::from_stack(ptr, idx))
-        } else {
-            Err(Error::UnexpectedType)
+        unsafe {
+            if sys::lua_type(ptr, idx) == sys::LUA_TSTRING as i32 {
+                let lua = RefCell::new(InnerLua::from_ptr(ptr));
+                sys::lua_pushvalue(ptr, idx);
+                let slice = slice_from_stack(ptr, -1);
+                let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
+
+                Ok(Self {
+                    state: OwnedState { lua, id, slice },
+                })
+            } else {
+                Err(Error::UnexpectedType)
+            }
         }
     }
 }

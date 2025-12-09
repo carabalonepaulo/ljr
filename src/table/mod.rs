@@ -213,11 +213,6 @@ impl StackTable {
     }
 
     #[inline]
-    pub fn to_owned(&self) -> TableRef {
-        Table::<Owned>::from_stack(self.state.ptr, self.state.idx)
-    }
-
-    #[inline]
     pub fn try_push(&mut self, value: impl ToLua) -> Result<(), Error> {
         self.with_mut(|t| t.try_push(value))
     }
@@ -326,6 +321,16 @@ impl StackTable {
         src: &HashMap<K, V>,
     ) {
         self.with_mut(|t| t.extend_from_map(src))
+    }
+
+    #[inline(always)]
+    pub fn try_to_owned(&self) -> Result<TableRef, Error> {
+        TableRef::try_from_lua(self.state.ptr, self.state.idx)
+    }
+
+    #[inline(always)]
+    pub fn to_owned(&self) -> TableRef {
+        self.try_to_owned().unwrap_display()
     }
 }
 

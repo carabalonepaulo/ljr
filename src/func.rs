@@ -187,12 +187,28 @@ where
     }
 }
 
+impl<I, O> StackFn<I, O>
+where
+    I: FromLua + ToLua,
+    O: FromLua + ToLua,
+{
+    #[inline(always)]
+    pub fn try_to_owned(&self) -> Result<FnRef<I, O>, Error> {
+        FnRef::<I, O>::try_from_lua(self.state.ptr, self.state.idx)
+    }
+
+    #[inline(always)]
+    pub fn to_owned(&self) -> FnRef<I, O> {
+        self.try_to_owned().unwrap_display()
+    }
+}
+
 impl<I, O> FnRef<I, O>
 where
     I: FromLua + ToLua,
     O: FromLua + ToLua,
 {
-    fn try_clone(&self) -> Result<Self, Error> {
+    pub fn try_clone(&self) -> Result<Self, Error> {
         let lua = self.state.lua.clone();
         let fn_ptr = self.state.fn_ptr;
         let id = unsafe {

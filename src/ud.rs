@@ -199,7 +199,20 @@ where
     }
 }
 
-impl<T> StackUd<T> where T: UserData {}
+impl<T> StackUd<T>
+where
+    T: UserData,
+{
+    #[inline(always)]
+    pub fn try_to_owned(&self) -> Result<UdRef<T>, Error> {
+        UdRef::<T>::try_from_lua(self.state.ptr, self.state.idx)
+    }
+
+    #[inline(always)]
+    pub fn to_owned(&self) -> UdRef<T> {
+        self.try_to_owned().unwrap_display()
+    }
+}
 
 impl<T> UdRef<T>
 where

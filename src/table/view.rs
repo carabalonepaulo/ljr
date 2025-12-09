@@ -77,14 +77,14 @@ impl<'t> TableView<'t> {
 
         unsafe {
             key.try_to_lua(self.0)?;
-            sys::lua_gettable(self.0, self.1);
+            sys::lua_rawget_(self.0, self.1);
             Ok(V::try_from_lua(self.0, -1)?)
         }
     }
 
     #[inline]
     pub fn get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Option<V> {
-        self.try_get(key).unwrap_display()
+        self.try_get(key).ok()
     }
 
     pub fn try_view<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(

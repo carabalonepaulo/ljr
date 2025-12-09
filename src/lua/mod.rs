@@ -335,7 +335,18 @@ macro_rules! impl_value_arg {
     ($($ty:ty),*) => { $(unsafe impl ValueArg for $ty {} )* };
 }
 
-impl_value_arg!((), i32, f32, f64, bool, String, StrRef, TableRef, Vec<u8>);
+impl_value_arg!(
+    (),
+    Nil,
+    i32,
+    f32,
+    f64,
+    bool,
+    String,
+    StrRef,
+    TableRef,
+    Vec<u8>
+);
 
 unsafe impl<T> ValueArg for UdRef<T> where T: UserData {}
 
