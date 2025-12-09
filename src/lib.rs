@@ -47,7 +47,7 @@ pub mod prelude {
     pub use crate::owned_value::OwnedValue;
     pub use crate::table::{StackTable, TableRef, builder::TableBuilder, view::TableView};
     pub use crate::ud::{StackUd, UdRef};
-    pub use crate::value::StackValue;
+    pub use crate::value::{StackValue, ValueRef};
     pub use macros::{module, user_data};
 }
 

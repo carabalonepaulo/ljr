@@ -54,6 +54,102 @@ pub trait ValueState {
 
 pub trait ValueAccess {
     fn kind(&self) -> Kind;
+
+    fn try_with_nil<F: FnOnce(Nil) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn try_as_nil(&self) -> Result<Nil, Error> {
+        self.try_with_nil(|v| v)
+    }
+
+    #[inline(always)]
+    fn as_nil(&self) -> Nil {
+        self.try_as_nil().unwrap_display()
+    }
+
+    fn try_with_bool<F: FnOnce(bool) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn try_as_bool(&self) -> Result<bool, Error> {
+        self.try_with_bool(|v| v)
+    }
+
+    #[inline(always)]
+    fn as_bool(&self) -> bool {
+        self.try_as_bool().unwrap_display()
+    }
+
+    fn try_with_number<F: FnOnce(f64) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn try_as_number(&self) -> Result<f64, Error> {
+        self.try_with_number(|v| v)
+    }
+
+    #[inline(always)]
+    fn as_number(&self) -> f64 {
+        self.try_as_number().unwrap_display()
+    }
+
+    fn try_with_str<F: FnOnce(&StackStr) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn try_as_str(&self) -> Result<StrRef, Error> {
+        self.try_with_str(|v| v.try_to_owned()).flatten()
+    }
+
+    #[inline(always)]
+    fn as_str(&self) -> StrRef {
+        self.try_as_str().unwrap_display()
+    }
+
+    fn try_with_ud<T: UserData, F: FnOnce(&StackUd<T>) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn try_as_ud<T: UserData>(&self) -> Result<UdRef<T>, Error> {
+        self.try_with_ud(|v| v.try_to_owned()).flatten()
+    }
+
+    #[inline(always)]
+    fn as_ud<T: UserData>(&self) -> UdRef<T> {
+        self.try_as_ud().unwrap_display()
+    }
+
+    fn try_with_func<I, O, F, R>(&self, f: F) -> Result<R, Error>
+    where
+        I: FromLua + ToLua,
+        O: FromLua + ToLua,
+        F: FnOnce(&StackFn<I, O>) -> R;
+
+    #[inline(always)]
+    fn try_as_func<I, O>(&self) -> Result<FnRef<I, O>, Error>
+    where
+        I: FromLua + ToLua,
+        O: FromLua + ToLua,
+    {
+        self.try_with_func(|v| v.try_to_owned()).flatten()
+    }
+
+    #[inline(always)]
+    fn as_func<I, O>(&self) -> FnRef<I, O>
+    where
+        I: FromLua + ToLua,
+        O: FromLua + ToLua,
+    {
+        self.try_as_func().unwrap_display()
+    }
+
+    fn try_with_table<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn try_as_table(&self) -> Result<TableRef, Error> {
+        self.try_with_table(|v| v.try_to_owned()).flatten()
+    }
+
+    #[inline(always)]
+    fn as_table(&self) -> TableRef {
+        self.try_as_table().unwrap_display()
+    }
 }
 
 pub struct BorrowedState {
@@ -70,6 +166,60 @@ impl ValueAccess for BorrowedState {
     fn kind(&self) -> Kind {
         self.kind
     }
+
+    fn try_with_nil<F: FnOnce(Nil) -> R, R>(&self, f: F) -> Result<R, Error> {
+        match self.kind {
+            Kind::Nil => Ok(f(Nil)),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_bool<F: FnOnce(bool) -> R, R>(&self, f: F) -> Result<R, Error> {
+        match self.kind {
+            Kind::Bool => Ok(f(bool::try_from_lua(self.ptr, self.idx)?)),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_number<F: FnOnce(f64) -> R, R>(&self, f: F) -> Result<R, Error> {
+        match self.kind {
+            Kind::Number => Ok(f(f64::try_from_lua(self.ptr, self.idx)?)),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_str<F: FnOnce(&StackStr) -> R, R>(&self, f: F) -> Result<R, Error> {
+        match self.kind {
+            Kind::String => Ok(f(&StackStr::try_from_lua(self.ptr, self.idx)?)),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_ud<T: UserData, F: FnOnce(&StackUd<T>) -> R, R>(&self, f: F) -> Result<R, Error> {
+        match self.kind {
+            Kind::UserData => Ok(f(&StackUd::<T>::try_from_lua(self.ptr, self.idx)?)),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_func<I, O, F, R>(&self, f: F) -> Result<R, Error>
+    where
+        I: FromLua + ToLua,
+        O: FromLua + ToLua,
+        F: FnOnce(&StackFn<I, O>) -> R,
+    {
+        match self.kind {
+            Kind::Func => Ok(f(&StackFn::<I, O>::try_from_lua(self.ptr, self.idx)?)),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_table<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> Result<R, Error> {
+        match self.kind {
+            Kind::Table => Ok(f(&StackTable::try_from_lua(self.ptr, self.idx)?)),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
 }
 
 #[allow(unused)]
@@ -77,6 +227,21 @@ pub struct OwnedState {
     lua: RefCell<Rc<InnerLua>>,
     id: i32,
     kind: Kind,
+}
+
+impl OwnedState {
+    fn with_value<F, R>(&self, f: F) -> Result<R, Error>
+    where
+        F: FnOnce(*mut sys::lua_State) -> Result<R, Error>,
+    {
+        unsafe {
+            let ptr = self.lua.borrow().try_state()?;
+            let _g = StackGuard::new(ptr);
+            sys::lua_rawgeti_(ptr, sys::LUA_REGISTRYINDEX, self.id);
+            let result = f(ptr);
+            result
+        }
+    }
 }
 
 impl Drop for OwnedState {
@@ -95,12 +260,84 @@ impl ValueAccess for OwnedState {
     fn kind(&self) -> Kind {
         self.kind
     }
+
+    fn try_with_nil<F, R>(&self, f: F) -> Result<R, Error>
+    where
+        F: FnOnce(Nil) -> R,
+    {
+        match self.kind {
+            Kind::Nil => Ok(f(Nil)),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_bool<F, R>(&self, f: F) -> Result<R, Error>
+    where
+        F: FnOnce(bool) -> R,
+    {
+        match self.kind {
+            Kind::Bool => self.with_value(|ptr| Ok(f(bool::try_from_lua(ptr, -1)?))),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_number<F, R>(&self, f: F) -> Result<R, Error>
+    where
+        F: FnOnce(f64) -> R,
+    {
+        match self.kind {
+            Kind::Number => self.with_value(|ptr| Ok(f(f64::try_from_lua(ptr, -1)?))),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_str<F, R>(&self, f: F) -> Result<R, Error>
+    where
+        F: FnOnce(&StackStr) -> R,
+    {
+        match self.kind {
+            Kind::String => self.with_value(|ptr| Ok(f(&StackStr::try_from_lua(ptr, -1)?))),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_ud<T, F, R>(&self, f: F) -> Result<R, Error>
+    where
+        T: UserData,
+        F: FnOnce(&StackUd<T>) -> R,
+    {
+        match self.kind {
+            Kind::UserData => self.with_value(|ptr| Ok(f(&StackUd::<T>::try_from_lua(ptr, -1)?))),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_func<I, O, F, R>(&self, f: F) -> Result<R, Error>
+    where
+        I: FromLua + ToLua,
+        O: FromLua + ToLua,
+        F: FnOnce(&StackFn<I, O>) -> R,
+    {
+        match self.kind {
+            Kind::Func => self.with_value(|ptr| Ok(f(&StackFn::<I, O>::try_from_lua(ptr, -1)?))),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
+
+    fn try_with_table<F, R>(&self, f: F) -> Result<R, Error>
+    where
+        F: FnOnce(&StackTable) -> R,
+    {
+        match self.kind {
+            Kind::Table => self.with_value(|ptr| Ok(f(&StackTable::try_from_lua(ptr, -1)?))),
+            _ => Err(Error::UnexpectedType),
+        }
+    }
 }
 
 pub type StackValue = Value<Borrowed>;
 pub type ValueRef = Value<Owned>;
 
-// #[derive(Debug)]
 pub struct Value<M>
 where
     M: Mode + ValueState,
@@ -114,88 +351,69 @@ where
     M: Mode + ValueState,
     M::State: ValueAccess,
 {
-}
-
-impl StackValue {
-    pub fn try_with_nil<F: FnOnce(Nil) -> R, R>(&self, f: F) -> Result<R, Error> {
-        match self.state.kind {
-            Kind::Nil => Ok(f(Nil)),
-            _ => Err(Error::UnexpectedType),
-        }
+    #[inline(always)]
+    pub fn kind(&self) -> Kind {
+        self.state.kind()
     }
 
     #[inline(always)]
-    pub fn with_nil<F: FnOnce(Nil) -> R, R>(&self, f: F) -> R {
-        self.try_with_nil(f).unwrap_display()
+    pub fn try_with_nil<F: FnOnce(Nil) -> R, R>(&self, f: F) -> Result<R, Error> {
+        self.state.try_with_nil(f)
     }
 
     #[inline(always)]
     pub fn try_as_nil(&self) -> Result<Nil, Error> {
-        self.try_with_nil(|v| v)
+        self.state.try_as_nil()
     }
 
     #[inline(always)]
     pub fn as_nil(&self) -> Nil {
-        self.try_as_nil().unwrap_display()
+        self.state.as_nil()
     }
 
     #[inline(always)]
     pub fn try_with_bool<F: FnOnce(bool) -> R, R>(&self, f: F) -> Result<R, Error> {
-        match self.state.kind {
-            Kind::Bool => Ok(f(bool::try_from_lua(self.state.ptr, self.state.idx)?)),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    #[inline(always)]
-    pub fn with_bool<F: FnOnce(bool) -> R, R>(&self, f: F) -> R {
-        self.try_with_bool(f).unwrap_display()
+        self.state.try_with_bool(f)
     }
 
     #[inline(always)]
     pub fn try_as_bool(&self) -> Result<bool, Error> {
-        self.try_with_bool(|v| v)
+        self.state.try_as_bool()
     }
 
     #[inline(always)]
     pub fn as_bool(&self) -> bool {
-        self.try_as_bool().unwrap_display()
+        self.state.as_bool()
     }
 
     #[inline(always)]
     pub fn try_with_number<F: FnOnce(f64) -> R, R>(&self, f: F) -> Result<R, Error> {
-        match self.state.kind {
-            Kind::Number => Ok(f(f64::try_from_lua(self.state.ptr, self.state.idx)?)),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    #[inline(always)]
-    pub fn with_number<F: FnOnce(f64) -> R, R>(&self, f: F) -> R {
-        self.try_with_number(f).unwrap_display()
+        self.state.try_with_number(f)
     }
 
     #[inline(always)]
     pub fn try_as_number(&self) -> Result<f64, Error> {
-        self.try_with_number(|v| v)
+        self.state.try_as_number()
     }
 
     #[inline(always)]
     pub fn as_number(&self) -> f64 {
-        self.try_as_number().unwrap_display()
+        self.state.as_number()
     }
 
     #[inline(always)]
     pub fn try_with_str<F: FnOnce(&StackStr) -> R, R>(&self, f: F) -> Result<R, Error> {
-        match self.state.kind {
-            Kind::String => Ok(f(&StackStr::try_from_lua(self.state.ptr, self.state.idx)?)),
-            _ => Err(Error::UnexpectedType),
-        }
+        self.state.try_with_str(f)
     }
 
     #[inline(always)]
-    pub fn with_str<F: FnOnce(&StackStr) -> R, R>(&self, f: F) -> R {
-        self.try_with_str(f).unwrap_display()
+    pub fn try_as_str(&self) -> Result<StrRef, Error> {
+        self.state.try_as_str()
+    }
+
+    #[inline(always)]
+    pub fn as_str(&self) -> StrRef {
+        self.state.as_str()
     }
 
     #[inline(always)]
@@ -203,60 +421,64 @@ impl StackValue {
         &self,
         f: F,
     ) -> Result<R, Error> {
-        match self.state.kind {
-            Kind::UserData => Ok(f(&StackUd::<T>::try_from_lua(
-                self.state.ptr,
-                self.state.idx,
-            )?)),
-            _ => Err(Error::UnexpectedType),
-        }
+        self.state.try_with_ud(f)
     }
 
     #[inline(always)]
-    pub fn with_ud<T: UserData, F: FnOnce(&StackUd<T>) -> R, R>(&self, f: F) -> R {
-        self.try_with_ud(f).unwrap_display()
+    pub fn try_as_ud<T: UserData>(&self) -> Result<UdRef<T>, Error> {
+        self.state.try_as_ud()
     }
 
+    #[inline(always)]
+    pub fn as_ud<T: UserData>(&self) -> UdRef<T> {
+        self.state.as_ud()
+    }
+
+    #[inline(always)]
     pub fn try_with_func<I, O, F, R>(&self, f: F) -> Result<R, Error>
     where
         I: FromLua + ToLua,
         O: FromLua + ToLua,
         F: FnOnce(&StackFn<I, O>) -> R,
     {
-        match self.state.kind {
-            Kind::Func => Ok(f(&StackFn::<I, O>::try_from_lua(
-                self.state.ptr,
-                self.state.idx,
-            )?)),
-            _ => Err(Error::UnexpectedType),
-        }
+        self.state.try_with_func(f)
     }
 
     #[inline(always)]
-    pub fn with_func<I, O, F, R>(&self, f: F) -> R
+    pub fn try_as_func<I, O>(&self) -> Result<FnRef<I, O>, Error>
     where
         I: FromLua + ToLua,
         O: FromLua + ToLua,
-        F: FnOnce(&StackFn<I, O>) -> R,
     {
-        self.try_with_func(f).unwrap_display()
-    }
-
-    pub fn try_with_table<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> Result<R, Error> {
-        match self.state.kind {
-            Kind::Table => Ok(f(&StackTable::try_from_lua(
-                self.state.ptr,
-                self.state.idx,
-            )?)),
-            _ => Err(Error::UnexpectedType),
-        }
+        self.state.try_as_func()
     }
 
     #[inline(always)]
-    pub fn with_table<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> R {
-        self.try_with_table(f).unwrap_display()
+    pub fn as_func<I, O>(&self) -> FnRef<I, O>
+    where
+        I: FromLua + ToLua,
+        O: FromLua + ToLua,
+    {
+        self.state.as_func()
     }
 
+    #[inline(always)]
+    pub fn try_with_table<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> Result<R, Error> {
+        self.state.try_with_table(f)
+    }
+
+    #[inline(always)]
+    pub fn try_as_table(&self) -> Result<TableRef, Error> {
+        self.state.try_as_table()
+    }
+
+    #[inline(always)]
+    pub fn as_table(&self) -> TableRef {
+        self.state.as_table()
+    }
+}
+
+impl StackValue {
     #[inline(always)]
     pub fn try_to_owned(&self) -> Result<ValueRef, Error> {
         ValueRef::try_from_stack(self.state.ptr, self.state.idx)
@@ -280,173 +502,6 @@ impl ValueRef {
                 state: OwnedState { lua, id, kind },
             })
         }
-    }
-
-    fn with_value<F, R>(&self, f: F) -> Result<R, Error>
-    where
-        F: FnOnce(*mut sys::lua_State) -> Result<R, Error>,
-    {
-        unsafe {
-            let ptr = self.state.lua.borrow().try_state()?;
-            let _g = StackGuard::new(ptr);
-            sys::lua_rawgeti_(ptr, sys::LUA_REGISTRYINDEX, self.state.id);
-            let result = f(ptr);
-            result
-        }
-    }
-
-    pub fn try_with_nil<F, R>(&self, f: F) -> Result<R, Error>
-    where
-        F: FnOnce(&Nil) -> R,
-    {
-        match self.state.kind {
-            Kind::Nil => Ok(f(&Nil)),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    #[inline(always)]
-    pub fn try_as_nil(&self) -> Result<Nil, Error> {
-        self.try_with_nil(|v| *v)
-    }
-
-    #[inline(always)]
-    pub fn as_nil(&self) -> Nil {
-        self.try_as_nil().unwrap_display()
-    }
-
-    pub fn try_with_bool<F, R>(&self, f: F) -> Result<R, Error>
-    where
-        F: FnOnce(&bool) -> R,
-    {
-        match self.state.kind {
-            Kind::Bool => self.with_value(|ptr| Ok(f(&bool::try_from_lua(ptr, -1)?))),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    #[inline(always)]
-    pub fn try_as_bool(&self) -> Result<bool, Error> {
-        self.try_with_bool(|v| *v)
-    }
-
-    #[inline(always)]
-    pub fn as_bool(&self) -> bool {
-        self.try_as_bool().unwrap_display()
-    }
-
-    pub fn try_with_number<F, R>(&self, f: F) -> Result<R, Error>
-    where
-        F: FnOnce(&f64) -> R,
-    {
-        match self.state.kind {
-            Kind::Number => self.with_value(|ptr| Ok(f(&f64::try_from_lua(ptr, -1)?))),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    #[inline(always)]
-    pub fn try_as_number(&self) -> Result<f64, Error> {
-        self.try_with_number(|v| *v)
-    }
-
-    #[inline(always)]
-    pub fn as_number(&self) -> f64 {
-        self.try_as_number().unwrap_display()
-    }
-
-    pub fn try_with_str<F, R>(&self, f: F) -> Result<R, Error>
-    where
-        F: FnOnce(&StackStr) -> R,
-    {
-        match self.state.kind {
-            Kind::String => self.with_value(|ptr| Ok(f(&StackStr::try_from_lua(ptr, -1)?))),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    #[inline(always)]
-    pub fn try_as_str(&self) -> Result<StrRef, Error> {
-        self.try_with_str(|v| v.try_to_owned()).flatten()
-    }
-
-    #[inline(always)]
-    pub fn as_str(&self) -> StrRef {
-        self.try_as_str().unwrap_display()
-    }
-
-    pub fn try_with_ud<T, F, R>(&self, f: F) -> Result<R, Error>
-    where
-        T: UserData,
-        F: FnOnce(&StackUd<T>) -> R,
-    {
-        match self.state.kind {
-            Kind::UserData => self.with_value(|ptr| Ok(f(&StackUd::<T>::try_from_lua(ptr, -1)?))),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    #[inline(always)]
-    pub fn try_as_ud<T: UserData>(&self) -> Result<UdRef<T>, Error> {
-        self.try_with_ud(|v| v.try_to_owned()).flatten()
-    }
-
-    #[inline(always)]
-    pub fn as_ud<T>(&self) -> UdRef<T>
-    where
-        T: UserData,
-    {
-        self.try_as_ud().unwrap_display()
-    }
-
-    pub fn try_with_func<I, O, F, R>(&self, f: F) -> Result<R, Error>
-    where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-        F: FnOnce(&StackFn<I, O>) -> R,
-    {
-        match self.state.kind {
-            Kind::Func => self.with_value(|ptr| Ok(f(&StackFn::<I, O>::try_from_lua(ptr, -1)?))),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    #[inline(always)]
-    pub fn try_as_func<I, O>(&self) -> Result<FnRef<I, O>, Error>
-    where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-    {
-        self.try_with_func(|v| v.try_to_owned()).flatten()
-    }
-
-    #[inline(always)]
-    pub fn as_func<I, O>(&self) -> FnRef<I, O>
-    where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-    {
-        self.try_as_func().unwrap_display()
-    }
-
-    pub fn try_with_table<F, R>(&self, f: F) -> Result<R, Error>
-    where
-        F: FnOnce(&StackTable) -> R,
-    {
-        match self.state.kind {
-            Kind::Table => self.with_value(|ptr| Ok(f(&StackTable::try_from_lua(ptr, -1)?))),
-            _ => Err(Error::UnexpectedType),
-        }
-    }
-
-    #[inline(always)]
-    pub fn try_as_table(&self) -> Result<TableRef, Error> {
-        self.try_with_table(|v| v.try_to_owned()).flatten()
-    }
-
-    #[inline(always)]
-    pub fn as_table(&self) -> TableRef {
-        self.try_as_table().unwrap_display()
     }
 
     pub fn try_clone(&self) -> Result<Self, Error> {
@@ -525,30 +580,17 @@ unsafe impl ToLua for ValueRef {
     }
 }
 
-impl std::fmt::Debug for StackValue {
+impl<M> std::fmt::Debug for Value<M>
+where
+    M: Mode + ValueState,
+    M::State: ValueAccess,
+{
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self.state.kind() {
             Kind::Nil => write!(f, "Nil"),
             Kind::Bool => write!(f, "Bool({})", self.as_bool()),
             Kind::Number => write!(f, "Number({})", self.as_number()),
-            Kind::String => self.with_str(|s| write!(f, "String({:?})", s)),
-            Kind::Table => write!(f, "Table"),
-            Kind::Func => write!(f, "Function"),
-            Kind::UserData => write!(f, "UserData"),
-            Kind::Unknown => write!(f, "Unknown"),
-        }
-    }
-}
-
-impl std::fmt::Debug for ValueRef {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.state.kind() {
-            Kind::Nil => write!(f, "Nil"),
-            Kind::Bool => write!(f, "Bool({})", self.as_bool()),
-            Kind::Number => write!(f, "Number({})", self.as_number()),
-            Kind::String => self
-                .try_with_str(|s| write!(f, "String({:?})", s.as_str()))
-                .unwrap(),
+            Kind::String => write!(f, "String({:?})", self.as_str().as_str()),
             Kind::Table => write!(f, "Table"),
             Kind::Func => write!(f, "Function"),
             Kind::UserData => write!(f, "UserData"),
