@@ -156,6 +156,10 @@ where
     M: Mode + TableStorage,
     M::State: TableAccess,
 {
+    pub fn id(&self) -> usize {
+        unsafe { self.state.get_table_ptr() as usize }
+    }
+
     #[inline]
     pub fn try_as_ref<'t>(&'t self) -> Result<Guard<'t>, Error> {
         self.state.try_as_ref()
