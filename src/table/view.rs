@@ -97,7 +97,7 @@ impl<'t> TableView<'t> {
             helper::try_check_stack(self.0, 1)?;
             let _g = StackGuard::new(self.0);
             key.to_lua_unchecked(self.0);
-            sys::lua_gettable(self.0, self.1);
+            sys::lua_rawget_(self.0, self.1);
             let value = V::try_from_lua(self.0, -1)?;
             Ok(f(&value))
         }
@@ -131,7 +131,7 @@ impl<'t> TableView<'t> {
             return Err(Error::TableIsEmpty);
         }
 
-        unsafe { sys::lua_rawgeti(self.0, self.1, len as _) };
+        unsafe { sys::lua_rawgeti_(self.0, self.1, len as _) };
         let val = <T as FromLua>::try_from_lua(self.0, -1)?;
 
         unsafe {
@@ -157,7 +157,7 @@ impl<'t> TableView<'t> {
             return Err(Error::TableIsEmpty);
         }
 
-        unsafe { sys::lua_rawgeti(self.0, self.1, len as _) };
+        unsafe { sys::lua_rawgeti_(self.0, self.1, len as _) };
         let value = <T as FromLua>::try_from_lua(self.0, -1)?;
 
         let result = f(&value);
@@ -278,7 +278,7 @@ impl<'t> TableView<'t> {
         unsafe {
             let key_addr = SHARED_REMOVE_KEY as *mut std::ffi::c_void;
 
-            sys::lua_rawgeti(self.0, self.1, idx as _);
+            sys::lua_rawgeti_(self.0, self.1, idx as _);
             if !<T as IsType>::is_type(self.0, -1) {
                 return Err(Error::WrongReturnType);
             }
@@ -302,7 +302,7 @@ impl<'t> TableView<'t> {
     pub fn try_contains_key<'a, K: ToLua>(&self, key: K) -> Result<bool, Error> {
         const { assert!(K::LEN == 1) }
         key.try_to_lua(self.0)?;
-        unsafe { sys::lua_gettable(self.0, self.1) };
+        unsafe { sys::lua_rawget_(self.0, self.1) };
         let not_nil = unsafe { sys::lua_isnil(self.0, -1) == 0 };
         unsafe { sys::lua_pop(self.0, 1) };
         Ok(not_nil)
@@ -400,7 +400,7 @@ where
 
     fn next(&mut self) -> Option<Self::Item> {
         while self.current <= self.len {
-            unsafe { sys::lua_rawgeti(self.tref.0, self.tref.1, self.current as _) };
+            unsafe { sys::lua_rawgeti_(self.tref.0, self.tref.1, self.current as _) };
             let val = <T as FromLua>::try_from_lua(self.tref.0, -1).ok();
             unsafe { sys::lua_pop(self.tref.0, 1) };
 
