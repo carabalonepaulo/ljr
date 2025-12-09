@@ -10,6 +10,7 @@ use crate::{
     lua::InnerLua,
     owned_value::LuaInnerHandle,
     prelude::OwnedValue,
+    stack_guard::StackGuard,
     sys,
     table::{StackTable, TableRef},
     to_lua::ToLua,
@@ -287,26 +288,26 @@ impl ValueRef {
     {
         unsafe {
             let ptr = self.state.lua.borrow().try_state()?;
+            let _g = StackGuard::new(ptr);
             sys::lua_rawgeti_(ptr, sys::LUA_REGISTRYINDEX, self.state.id);
             let result = f(ptr);
-            sys::lua_pop(ptr, 1);
             result
         }
     }
 
     pub fn try_with_nil<F, R>(&self, f: F) -> Result<R, Error>
     where
-        F: FnOnce(&Nil) -> Result<R, Error>,
+        F: FnOnce(&Nil) -> R,
     {
         match self.state.kind {
-            Kind::Nil => f(&Nil),
+            Kind::Nil => Ok(f(&Nil)),
             _ => Err(Error::UnexpectedType),
         }
     }
 
     #[inline(always)]
     pub fn try_as_nil(&self) -> Result<Nil, Error> {
-        self.try_with_nil(|v| Ok(*v))
+        self.try_with_nil(|v| *v)
     }
 
     #[inline(always)]
@@ -316,17 +317,17 @@ impl ValueRef {
 
     pub fn try_with_bool<F, R>(&self, f: F) -> Result<R, Error>
     where
-        F: FnOnce(&bool) -> Result<R, Error>,
+        F: FnOnce(&bool) -> R,
     {
         match self.state.kind {
-            Kind::Bool => self.with_value(|ptr| f(&bool::try_from_lua(ptr, -1)?)),
+            Kind::Bool => self.with_value(|ptr| Ok(f(&bool::try_from_lua(ptr, -1)?))),
             _ => Err(Error::UnexpectedType),
         }
     }
 
     #[inline(always)]
     pub fn try_as_bool(&self) -> Result<bool, Error> {
-        self.try_with_bool(|v| Ok(*v))
+        self.try_with_bool(|v| *v)
     }
 
     #[inline(always)]
@@ -336,17 +337,17 @@ impl ValueRef {
 
     pub fn try_with_number<F, R>(&self, f: F) -> Result<R, Error>
     where
-        F: FnOnce(&f64) -> Result<R, Error>,
+        F: FnOnce(&f64) -> R,
     {
         match self.state.kind {
-            Kind::Number => self.with_value(|ptr| f(&f64::try_from_lua(ptr, -1)?)),
+            Kind::Number => self.with_value(|ptr| Ok(f(&f64::try_from_lua(ptr, -1)?))),
             _ => Err(Error::UnexpectedType),
         }
     }
 
     #[inline(always)]
     pub fn try_as_number(&self) -> Result<f64, Error> {
-        self.try_with_number(|v| Ok(*v))
+        self.try_with_number(|v| *v)
     }
 
     #[inline(always)]
@@ -356,17 +357,17 @@ impl ValueRef {
 
     pub fn try_with_str<F, R>(&self, f: F) -> Result<R, Error>
     where
-        F: FnOnce(&StackStr) -> Result<R, Error>,
+        F: FnOnce(&StackStr) -> R,
     {
         match self.state.kind {
-            Kind::String => self.with_value(|ptr| f(&StackStr::try_from_lua(ptr, -1)?)),
+            Kind::String => self.with_value(|ptr| Ok(f(&StackStr::try_from_lua(ptr, -1)?))),
             _ => Err(Error::UnexpectedType),
         }
     }
 
     #[inline(always)]
     pub fn try_as_str(&self) -> Result<StrRef, Error> {
-        self.try_with_str(|v| Ok(v.to_owned()))
+        self.try_with_str(|v| v.try_to_owned()).flatten()
     }
 
     #[inline(always)]
@@ -377,17 +378,17 @@ impl ValueRef {
     pub fn try_with_ud<T, F, R>(&self, f: F) -> Result<R, Error>
     where
         T: UserData,
-        F: FnOnce(&StackUd<T>) -> Result<R, Error>,
+        F: FnOnce(&StackUd<T>) -> R,
     {
         match self.state.kind {
-            Kind::UserData => self.with_value(|ptr| f(&StackUd::<T>::try_from_lua(ptr, -1)?)),
+            Kind::UserData => self.with_value(|ptr| Ok(f(&StackUd::<T>::try_from_lua(ptr, -1)?))),
             _ => Err(Error::UnexpectedType),
         }
     }
 
     #[inline(always)]
     pub fn try_as_ud<T: UserData>(&self) -> Result<UdRef<T>, Error> {
-        self.try_with_ud(|v| v.try_to_owned())
+        self.try_with_ud(|v| v.try_to_owned()).flatten()
     }
 
     #[inline(always)]
@@ -402,10 +403,10 @@ impl ValueRef {
     where
         I: FromLua + ToLua,
         O: FromLua + ToLua,
-        F: FnOnce(&StackFn<I, O>) -> Result<R, Error>,
+        F: FnOnce(&StackFn<I, O>) -> R,
     {
         match self.state.kind {
-            Kind::Func => self.with_value(|ptr| f(&StackFn::<I, O>::try_from_lua(ptr, -1)?)),
+            Kind::Func => self.with_value(|ptr| Ok(f(&StackFn::<I, O>::try_from_lua(ptr, -1)?))),
             _ => Err(Error::UnexpectedType),
         }
     }
@@ -416,7 +417,7 @@ impl ValueRef {
         I: FromLua + ToLua,
         O: FromLua + ToLua,
     {
-        self.try_with_func(|v| v.try_to_owned())
+        self.try_with_func(|v| v.try_to_owned()).flatten()
     }
 
     #[inline(always)]
@@ -430,17 +431,17 @@ impl ValueRef {
 
     pub fn try_with_table<F, R>(&self, f: F) -> Result<R, Error>
     where
-        F: FnOnce(&StackTable) -> Result<R, Error>,
+        F: FnOnce(&StackTable) -> R,
     {
         match self.state.kind {
-            Kind::Table => self.with_value(|ptr| f(&StackTable::try_from_lua(ptr, -1)?)),
+            Kind::Table => self.with_value(|ptr| Ok(f(&StackTable::try_from_lua(ptr, -1)?))),
             _ => Err(Error::UnexpectedType),
         }
     }
 
     #[inline(always)]
     pub fn try_as_table(&self) -> Result<TableRef, Error> {
-        self.try_with_table(|v| v.try_to_owned())
+        self.try_with_table(|v| v.try_to_owned()).flatten()
     }
 
     #[inline(always)]
@@ -546,7 +547,7 @@ impl std::fmt::Debug for ValueRef {
             Kind::Bool => write!(f, "Bool({})", self.as_bool()),
             Kind::Number => write!(f, "Number({})", self.as_number()),
             Kind::String => self
-                .try_with_str(|s| Ok(write!(f, "String({:?})", s.as_str())))
+                .try_with_str(|s| write!(f, "String({:?})", s.as_str()))
                 .unwrap(),
             Kind::Table => write!(f, "Table"),
             Kind::Func => write!(f, "Function"),
