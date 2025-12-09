@@ -43,3 +43,24 @@ fn test_fn() {
         })
     });
 }
+
+#[test]
+fn test_stack_diff_ctx() {
+    let mut lua_a = Lua::new();
+    lua_a.with_globals_mut(|g| g.set("str_value", "hello world"));
+
+    let mut lua_b = Lua::new();
+    lua_b.with_globals_mut(|g| g.set("str_value", "hello world"));
+
+    let result = lua_a
+        .with_globals(|ag| {
+            lua_b.with_globals(|bg| {
+                ag.view("str_value", |a_str: &StackStr| {
+                    bg.view("str_value", |b_str: &StackStr| a_str == b_str)
+                })
+            })
+        })
+        .flatten();
+
+    assert!(matches!(result, Some(false)));
+}
