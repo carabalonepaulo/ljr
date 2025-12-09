@@ -17,7 +17,7 @@ use crate::{
     ud::{StackUd, UdRef},
 };
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Kind {
     Nil,
     Bool,
@@ -53,9 +53,20 @@ pub trait ValueState {
 }
 
 pub trait ValueAccess {
+    fn try_state(&self) -> Result<*mut sys::lua_State, Error>;
+
+    fn push(&self, ptr: *mut sys::lua_State);
+
+    fn is_stack_bound(&self) -> bool;
+
     fn kind(&self) -> Kind;
 
     fn try_with_nil<F: FnOnce(Nil) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn with_nil<F: FnOnce(Nil) -> R, R>(&self, f: F) -> R {
+        self.try_with_nil(f).unwrap_display()
+    }
 
     #[inline(always)]
     fn try_as_nil(&self) -> Result<Nil, Error> {
@@ -70,6 +81,11 @@ pub trait ValueAccess {
     fn try_with_bool<F: FnOnce(bool) -> R, R>(&self, f: F) -> Result<R, Error>;
 
     #[inline(always)]
+    fn with_bool<F: FnOnce(bool) -> R, R>(&self, f: F) -> R {
+        self.try_with_bool(f).unwrap_display()
+    }
+
+    #[inline(always)]
     fn try_as_bool(&self) -> Result<bool, Error> {
         self.try_with_bool(|v| v)
     }
@@ -80,6 +96,11 @@ pub trait ValueAccess {
     }
 
     fn try_with_number<F: FnOnce(f64) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn with_number<F: FnOnce(f64) -> R, R>(&self, f: F) -> R {
+        self.try_with_number(f).unwrap_display()
+    }
 
     #[inline(always)]
     fn try_as_number(&self) -> Result<f64, Error> {
@@ -94,6 +115,11 @@ pub trait ValueAccess {
     fn try_with_str<F: FnOnce(&StackStr) -> R, R>(&self, f: F) -> Result<R, Error>;
 
     #[inline(always)]
+    fn with_str<F: FnOnce(&StackStr) -> R, R>(&self, f: F) -> R {
+        self.try_with_str(f).unwrap_display()
+    }
+
+    #[inline(always)]
     fn try_as_str(&self) -> Result<StrRef, Error> {
         self.try_with_str(|v| v.try_to_owned()).flatten()
     }
@@ -104,6 +130,11 @@ pub trait ValueAccess {
     }
 
     fn try_with_ud<T: UserData, F: FnOnce(&StackUd<T>) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn with_ud<T: UserData, F: FnOnce(&StackUd<T>) -> R, R>(&self, f: F) -> R {
+        self.try_with_ud(f).unwrap_display()
+    }
 
     #[inline(always)]
     fn try_as_ud<T: UserData>(&self) -> Result<UdRef<T>, Error> {
@@ -120,6 +151,16 @@ pub trait ValueAccess {
         I: FromLua + ToLua,
         O: FromLua + ToLua,
         F: FnOnce(&StackFn<I, O>) -> R;
+
+    #[inline(always)]
+    fn with_func<I, O, F, R>(&self, f: F) -> R
+    where
+        I: FromLua + ToLua,
+        O: FromLua + ToLua,
+        F: FnOnce(&StackFn<I, O>) -> R,
+    {
+        self.try_with_func(f).unwrap_display()
+    }
 
     #[inline(always)]
     fn try_as_func<I, O>(&self) -> Result<FnRef<I, O>, Error>
@@ -140,6 +181,11 @@ pub trait ValueAccess {
     }
 
     fn try_with_table<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> Result<R, Error>;
+
+    #[inline(always)]
+    fn with_table<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> R {
+        self.try_with_table(f).unwrap_display()
+    }
 
     #[inline(always)]
     fn try_as_table(&self) -> Result<TableRef, Error> {
@@ -163,6 +209,19 @@ impl ValueState for Borrowed {
 }
 
 impl ValueAccess for BorrowedState {
+    fn try_state(&self) -> Result<*mut mlua_sys::lua_State, Error> {
+        Ok(self.ptr)
+    }
+
+    fn push(&self, ptr: *mut sys::lua_State) {
+        unsafe { sys::lua_pushvalue(ptr, self.idx) };
+    }
+
+    #[inline(always)]
+    fn is_stack_bound(&self) -> bool {
+        true
+    }
+
     fn kind(&self) -> Kind {
         self.kind
     }
@@ -257,6 +316,19 @@ impl ValueState for Owned {
 }
 
 impl ValueAccess for OwnedState {
+    fn try_state(&self) -> Result<*mut mlua_sys::lua_State, Error> {
+        self.lua.borrow().try_state()
+    }
+
+    fn push(&self, ptr: *mut sys::lua_State) {
+        unsafe { sys::lua_rawgeti_(ptr, sys::LUA_REGISTRYINDEX, self.id) };
+    }
+
+    #[inline(always)]
+    fn is_stack_bound(&self) -> bool {
+        false
+    }
+
     fn kind(&self) -> Kind {
         self.kind
     }
@@ -352,6 +424,16 @@ where
     M::State: ValueAccess,
 {
     #[inline(always)]
+    fn try_state(&self) -> Result<*mut mlua_sys::lua_State, Error> {
+        self.state.try_state()
+    }
+
+    #[inline(always)]
+    fn push(&self, ptr: *mut sys::lua_State) {
+        self.state.push(ptr);
+    }
+
+    #[inline(always)]
     pub fn kind(&self) -> Kind {
         self.state.kind()
     }
@@ -359,6 +441,11 @@ where
     #[inline(always)]
     pub fn try_with_nil<F: FnOnce(Nil) -> R, R>(&self, f: F) -> Result<R, Error> {
         self.state.try_with_nil(f)
+    }
+
+    #[inline(always)]
+    pub fn with_nil<F: FnOnce(Nil) -> R, R>(&self, f: F) -> R {
+        self.state.with_nil(f)
     }
 
     #[inline(always)]
@@ -377,6 +464,11 @@ where
     }
 
     #[inline(always)]
+    pub fn with_bool<F: FnOnce(bool) -> R, R>(&self, f: F) -> R {
+        self.state.with_bool(f)
+    }
+
+    #[inline(always)]
     pub fn try_as_bool(&self) -> Result<bool, Error> {
         self.state.try_as_bool()
     }
@@ -389,6 +481,11 @@ where
     #[inline(always)]
     pub fn try_with_number<F: FnOnce(f64) -> R, R>(&self, f: F) -> Result<R, Error> {
         self.state.try_with_number(f)
+    }
+
+    #[inline(always)]
+    pub fn with_number<F: FnOnce(f64) -> R, R>(&self, f: F) -> R {
+        self.state.with_number(f)
     }
 
     #[inline(always)]
@@ -407,6 +504,11 @@ where
     }
 
     #[inline(always)]
+    pub fn with_str<F: FnOnce(&StackStr) -> R, R>(&self, f: F) -> R {
+        self.state.with_str(f)
+    }
+
+    #[inline(always)]
     pub fn try_as_str(&self) -> Result<StrRef, Error> {
         self.state.try_as_str()
     }
@@ -422,6 +524,11 @@ where
         f: F,
     ) -> Result<R, Error> {
         self.state.try_with_ud(f)
+    }
+
+    #[inline(always)]
+    pub fn with_ud<T: UserData, F: FnOnce(&StackUd<T>) -> R, R>(&self, f: F) -> R {
+        self.state.with_ud(f)
     }
 
     #[inline(always)]
@@ -445,6 +552,16 @@ where
     }
 
     #[inline(always)]
+    pub fn with_func<I, O, F, R>(&self, f: F) -> R
+    where
+        I: FromLua + ToLua,
+        O: FromLua + ToLua,
+        F: FnOnce(&StackFn<I, O>) -> R,
+    {
+        self.state.with_func(f)
+    }
+
+    #[inline(always)]
     pub fn try_as_func<I, O>(&self) -> Result<FnRef<I, O>, Error>
     where
         I: FromLua + ToLua,
@@ -465,6 +582,11 @@ where
     #[inline(always)]
     pub fn try_with_table<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> Result<R, Error> {
         self.state.try_with_table(f)
+    }
+
+    #[inline(always)]
+    pub fn with_table<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> R {
+        self.state.with_table(f)
     }
 
     #[inline(always)]
@@ -597,6 +719,69 @@ where
             Kind::Unknown => write!(f, "Unknown"),
         }
     }
+}
+
+impl<M1, M2> PartialEq<Value<M2>> for Value<M1>
+where
+    M1: Mode + ValueState,
+    M1::State: ValueAccess,
+    M2: Mode + ValueState,
+    M2::State: ValueAccess,
+{
+    fn eq(&self, other: &Value<M2>) -> bool {
+        let self_kind = self.kind();
+        if self_kind != other.state.kind() {
+            return false;
+        }
+
+        let (Ok(self_state), Ok(other_state)) = (self.try_state(), other.try_state()) else {
+            return false;
+        };
+
+        if InnerLua::try_ensure_context_raw(self_state, other_state).is_err() {
+            return false;
+        }
+
+        let same_ctx = self_state == other_state;
+
+        if !same_ctx && (self.state.is_stack_bound() || other.state.is_stack_bound()) {
+            return false;
+        }
+
+        match self_kind {
+            Kind::Nil => true,
+            Kind::Bool => self.as_bool() == other.as_bool(),
+            Kind::Number => self.as_number() == other.as_number(),
+            Kind::String => self.with_str(|s| other.with_str(|os| s == os)),
+            Kind::UserData | Kind::Func => unsafe {
+                if !same_ctx {
+                    return false;
+                }
+
+                if helper::try_check_stack(self_state, 2).is_err() {
+                    return false;
+                }
+
+                self.push(self_state);
+                other.push(self_state);
+
+                let a = sys::lua_topointer(self_state, -2);
+                let b = sys::lua_topointer(self_state, -1);
+                sys::lua_pop(self_state, 2);
+
+                a == b
+            },
+            Kind::Table => self.with_table(|s| other.with_table(|os| s == os)),
+            _ => false,
+        }
+    }
+}
+
+impl<M> Eq for Value<M>
+where
+    M: Mode + ValueState,
+    M::State: ValueAccess,
+{
 }
 
 impl crate::owned_value::private::Sealed for ValueRef {}
