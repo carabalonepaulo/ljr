@@ -140,7 +140,7 @@ impl Lua {
         Table::new(self.inner.clone())
     }
 
-    pub fn try_create_value_ref<T: FromLua + ToLua>(&self, value: T) -> Result<ValueRef, Error> {
+    pub fn try_create_value_ref<T: ToLua>(&self, value: T) -> Result<ValueRef, Error> {
         let ptr = self.inner.try_state()?;
         <T as ToLua>::try_to_lua(value, ptr)?;
         let value = <ValueRef as FromLua>::try_from_lua(ptr, -1)?;
@@ -148,7 +148,7 @@ impl Lua {
         Ok(value)
     }
 
-    pub fn create_value_ref<T: FromLua + ToLua>(&self, value: T) -> ValueRef {
+    pub fn create_value_ref<T: ToLua>(&self, value: T) -> ValueRef {
         self.try_create_value_ref(value).unwrap_display()
     }
 
