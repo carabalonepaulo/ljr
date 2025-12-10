@@ -62,6 +62,10 @@ pub enum Error {
     TableIsEmpty,
     #[error("failed to create lua state, out of memory")]
     StateAllocationFailed,
+    #[error("no metatable")]
+    NoMetaTable,
+    #[error("{0}")]
+    Generic(String),
 }
 
 impl From<NulError> for Error {

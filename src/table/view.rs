@@ -9,6 +9,7 @@ use crate::{
     lua::ValueArg,
     stack_guard::StackGuard,
     sys,
+    table::StackTable,
     to_lua::ToLua,
 };
 
@@ -112,7 +113,7 @@ impl<'t> TableView<'t> {
         const { assert!(T::LEN == 1) }
         value.try_to_lua(self.0)?;
         let len = unsafe { sys::lua_objlen(self.0, self.1) };
-        unsafe { sys::lua_rawseti(self.0, self.1, (len + 1) as _) };
+        unsafe { sys::lua_rawseti_(self.0, self.1, (len + 1) as _) };
         Ok(())
     }
 
@@ -346,6 +347,43 @@ impl<'t> TableView<'t> {
                     return;
                 }
             }
+        }
+    }
+
+    pub fn try_with_metatable<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> Result<R, Error> {
+        unsafe {
+            let _g = StackGuard::new(self.0);
+            if sys::lua_getmetatable(self.0, self.1) == 0 {
+                return Err(Error::NoMetaTable);
+            }
+
+            let table = StackTable::from_stack(self.0, -1);
+            Ok(f(&table))
+        }
+    }
+
+    pub fn try_add_table<K: ToLua, F: FnOnce(&mut StackTable) -> R, R>(
+        &mut self,
+        k: K,
+        narr: i32,
+        nrec: i32,
+        f: F,
+    ) -> Result<R, Error> {
+        let ptr = self.0;
+        unsafe {
+            helper::try_check_stack(ptr, 3)?;
+            let g = StackGuard::new(ptr);
+
+            k.to_lua_unchecked(ptr);
+            sys::lua_createtable(ptr, narr, nrec);
+
+            let tidx = sys::lua_absindex(ptr, -1);
+            let mut table = StackTable::from_stack(ptr, tidx);
+            let result = f(&mut table);
+
+            sys::lua_rawset(ptr, self.1);
+            g.commit();
+            Ok(result)
         }
     }
 

@@ -45,6 +45,7 @@ pub mod prelude {
     pub use crate::lstr::{StackStr, StrRef};
     pub use crate::lua::Lua;
     pub use crate::owned_value::OwnedValue;
+    pub use crate::stack_guard::StackGuard;
     pub use crate::table::{StackTable, TableRef, builder::TableBuilder, view::TableView};
     pub use crate::ud::{StackUd, UdRef};
     pub use crate::value::{StackValue, ValueRef};

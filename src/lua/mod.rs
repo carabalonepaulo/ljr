@@ -14,6 +14,7 @@ use crate::{
     sys,
     table::{StackTable, TableRef},
     ud::UdRef,
+    value::ValueRef,
 };
 use std::{ffi::CString, fmt::Display, rc::Rc};
 
@@ -122,12 +123,33 @@ impl Lua {
         self.try_open_libs().unwrap_display()
     }
 
+    pub fn try_create_table_with_capacity(&self, narr: i32, nrec: i32) -> Result<TableRef, Error> {
+        Table::try_with_capacity(self.inner.clone(), narr, nrec)
+    }
+
+    pub fn create_table_with_capacity(&self, narr: i32, nrec: i32) -> TableRef {
+        self.try_create_table_with_capacity(narr, nrec)
+            .unwrap_display()
+    }
+
     pub fn try_create_table(&self) -> Result<TableRef, Error> {
         Table::try_new(self.inner.clone())
     }
 
     pub fn create_table(&self) -> TableRef {
         Table::new(self.inner.clone())
+    }
+
+    pub fn try_create_value_ref<T: FromLua + ToLua>(&self, value: T) -> Result<ValueRef, Error> {
+        let ptr = self.inner.try_state()?;
+        <T as ToLua>::try_to_lua(value, ptr)?;
+        let value = <ValueRef as FromLua>::try_from_lua(ptr, -1)?;
+        unsafe { sys::lua_pop(ptr, 1) };
+        Ok(value)
+    }
+
+    pub fn create_value_ref<T: FromLua + ToLua>(&self, value: T) -> ValueRef {
+        self.try_create_value_ref(value).unwrap_display()
     }
 
     pub fn try_create_ref<T: UserData>(&self, value: T) -> Result<UdRef<T>, Error> {
