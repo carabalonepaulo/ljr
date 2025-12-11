@@ -401,7 +401,7 @@ impl<'t> TableView<'t> {
                 let val = <V as FromLua>::try_from_lua(ptr, -1);
 
                 let should_continue = match val {
-                    Ok(v) => f((current - 1) as i32, &v),
+                    Ok(v) => f(current as i32, &v),
                     _ => true,
                 };
 

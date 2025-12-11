@@ -973,3 +973,18 @@ fn test_remove_out_of_bounds() {
     assert_eq!(table.with(|t| t.len()), 3);
     assert_eq!(lua.top(), 0);
 }
+
+#[test]
+fn test_for_each_indexed() {
+    let lua = Lua::new();
+    let table = create_table!(lua, {10, 20, 30});
+
+    let mut n = 1;
+    table.with(|t| {
+        t.for_each_indexed(|i, _v: &i32| {
+            assert_eq!(i, n);
+            n += 1;
+            true
+        });
+    });
+}
