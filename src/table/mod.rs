@@ -316,7 +316,7 @@ impl StackTable {
 
     #[inline]
     pub fn extend_from_slice<T: ToLua + Clone>(&mut self, src: &[T]) {
-        self.with_mut(|t| t.extend_from_slice(src))
+        self.with_mut(|t| t.clone_from_slice(src))
     }
 
     #[inline]
@@ -324,7 +324,7 @@ impl StackTable {
         &mut self,
         src: &HashMap<K, V>,
     ) {
-        self.with_mut(|t| t.extend_from_map(src))
+        self.with_mut(|t| t.clone_from_map(src))
     }
 
     #[inline(always)]

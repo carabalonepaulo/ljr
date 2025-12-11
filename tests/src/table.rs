@@ -245,7 +245,7 @@ fn test_pop_with_preserves_stack_balance_on_error_simulation() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.with_mut(|t| t.extend_from_slice(&[1, 2, 3, 4, 5]));
+    table.with_mut(|t| t.clone_from_slice(&[1, 2, 3, 4, 5]));
 
     table.with_mut(|t| while let Some(_) = t.pop_then(|_: &i32| {}) {});
 
@@ -324,7 +324,7 @@ fn test_table_pop_with_primitive() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.with_mut(|t| t.extend_from_slice(&[10, 20, 30]));
+    table.with_mut(|t| t.clone_from_slice(&[10, 20, 30]));
     assert_eq!(table.with(|t| t.len()), 3);
 
     table.with_mut(|t| {
@@ -372,7 +372,7 @@ fn test_table_for_each_sum_primitive() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.with_mut(|t| t.extend_from_slice(&[10, 20, 30]));
+    table.with_mut(|t| t.clone_from_slice(&[10, 20, 30]));
 
     let mut sum = 0;
 
@@ -424,7 +424,7 @@ fn test_table_for_each_break_behavior() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.with_mut(|t| t.extend_from_slice(&[1, 2, 3, 4, 5]));
+    table.with_mut(|t| t.clone_from_slice(&[1, 2, 3, 4, 5]));
 
     let mut visited = 0;
 
@@ -521,7 +521,7 @@ fn test_pairs_iterator_break_leak() {
     lua.open_libs();
 
     let mut table = lua.create_table();
-    table.with_mut(|t| t.extend_from_slice(&[10, 20, 30, 40, 50]));
+    table.with_mut(|t| t.clone_from_slice(&[10, 20, 30, 40, 50]));
 
     assert_eq!(lua.top(), 0);
 

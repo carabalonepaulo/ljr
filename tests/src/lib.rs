@@ -613,7 +613,7 @@ fn test_table_extend_from_slice() {
     let mut table = create_table!(lua, {});
     assert_eq!(table.with(|t| t.len()), 0);
 
-    table.with_mut(|t| t.extend_from_slice(&[10, 20, 30]));
+    table.with_mut(|t| t.clone_from_slice(&[10, 20, 30]));
     assert_eq!(table.with(|t| t.len()), 3);
 
     table.with_mut(|t| t.clear());
@@ -633,7 +633,7 @@ fn test_table_extend_from_map() {
     map.insert("world".to_string(), true);
 
     let mut table = create_table!(lua, {});
-    table.with_mut(|t| t.extend_from_map(&map));
+    table.with_mut(|t| t.clone_from_map(&map));
 
     let mut values: Vec<(String, bool)> = table.with(|t| t.pairs::<String, bool>().collect());
     values.sort_unstable();

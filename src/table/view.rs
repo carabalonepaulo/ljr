@@ -56,75 +56,109 @@ impl<'t> TableView<'t> {
         Self(ptr, idx, PhantomData)
     }
 
-    pub fn try_set<'a, K: ToLua, V: ToLua>(&mut self, key: K, value: V) -> Result<(), Error> {
+    pub(crate) fn try_set_unchecked<'a, K: ToLua, V: ToLua>(
+        &mut self,
+        key: K,
+        value: V,
+    ) -> Result<(), Error> {
         const { assert!(K::LEN == 1 && V::LEN == 1) }
         unsafe {
-            helper::try_check_stack(self.0, 2)?;
-            key.to_lua_unchecked(self.0);
-            value.to_lua_unchecked(self.0);
+            key.try_to_lua_unchecked(self.0)?;
+            value.try_to_lua_unchecked(self.0)?;
             sys::lua_settable(self.0, self.1)
         };
         Ok(())
     }
 
-    #[inline]
+    #[inline(always)]
+    pub fn try_set<'a, K: ToLua, V: ToLua>(&mut self, key: K, value: V) -> Result<(), Error> {
+        unsafe { helper::try_check_stack(self.0, 2)? };
+        self.try_set_unchecked(key, value)
+    }
+
+    #[inline(always)]
     pub fn set<'a, K: ToLua, V: ToLua>(&mut self, key: K, value: V) {
         self.try_set(key, value).unwrap_display();
     }
 
-    pub fn try_get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Result<V, Error> {
+    pub(crate) fn try_get_unchecked<'a, K: ToLua, V: FromLua + ValueArg>(
+        &self,
+        key: K,
+    ) -> Result<V, Error> {
         const { assert!(K::LEN == 1 && V::LEN == 1) }
         let _g = StackGuard::new(self.0);
 
         unsafe {
-            key.try_to_lua(self.0)?;
+            key.try_to_lua_unchecked(self.0)?;
             sys::lua_rawget_(self.0, self.1);
             Ok(V::try_from_lua(self.0, -1)?)
         }
     }
 
-    #[inline]
+    #[inline(always)]
+    pub fn try_get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Result<V, Error> {
+        unsafe { helper::try_check_stack(self.0, 2)? };
+        self.try_get_unchecked(key)
+    }
+
+    #[inline(always)]
     pub fn get<'a, K: ToLua, V: FromLua + ValueArg>(&self, key: K) -> Option<V> {
         self.try_get(key).ok()
     }
 
-    pub fn try_view<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(
+    pub(crate) fn try_view_unchecked<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(
         &self,
         key: K,
         f: F,
     ) -> Result<R, Error> {
         const { assert!(K::LEN == 1 && V::LEN == 1) }
         unsafe {
-            helper::try_check_stack(self.0, 1)?;
             let _g = StackGuard::new(self.0);
-            key.to_lua_unchecked(self.0);
+            key.try_to_lua_unchecked(self.0)?;
             sys::lua_rawget_(self.0, self.1);
             let value = V::try_from_lua(self.0, -1)?;
             Ok(f(&value))
         }
     }
 
-    #[inline]
+    #[inline(always)]
+    pub fn try_view<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(
+        &self,
+        key: K,
+        f: F,
+    ) -> Result<R, Error> {
+        unsafe { helper::try_check_stack(self.0, 2)? };
+        self.try_view_unchecked(key, f)
+    }
+
+    #[inline(always)]
     pub fn view<'a, K: ToLua, V: FromLua, F: FnOnce(&V) -> R, R>(&self, key: K, f: F) -> Option<R> {
         self.try_view(key, f).ok()
     }
 
-    pub fn try_push<T: ToLua>(&mut self, value: T) -> Result<(), Error> {
+    pub(crate) fn try_push_unchecked<T: ToLua>(&mut self, value: T) -> Result<(), Error> {
         const { assert!(T::LEN == 1) }
-        value.try_to_lua(self.0)?;
-        let len = unsafe { sys::lua_objlen(self.0, self.1) };
-        unsafe { sys::lua_rawseti_(self.0, self.1, (len + 1) as _) };
-        Ok(())
+        unsafe {
+            value.try_to_lua_unchecked(self.0)?;
+            let len = sys::lua_objlen(self.0, self.1);
+            sys::lua_rawseti_(self.0, self.1, (len + 1) as _);
+            Ok(())
+        }
     }
 
-    #[inline]
+    #[inline(always)]
+    pub fn try_push<T: ToLua>(&mut self, value: T) -> Result<(), Error> {
+        unsafe { helper::try_check_stack(self.0, 2)? };
+        self.try_push_unchecked(value)
+    }
+
+    #[inline(always)]
     pub fn push<T: ToLua>(&mut self, value: T) {
         self.try_push(value).unwrap_display();
     }
 
-    pub fn try_pop<T: FromLua + ValueArg>(&mut self) -> Result<T, Error> {
+    pub(crate) fn try_pop_unchecked<T: FromLua + ValueArg>(&mut self) -> Result<T, Error> {
         const { assert!(T::LEN == 1) }
-        unsafe { helper::try_check_stack(self.0, 1)? };
         let _g = StackGuard::new(self.0);
 
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
@@ -143,14 +177,21 @@ impl<'t> TableView<'t> {
         Ok(val)
     }
 
-    #[inline]
+    #[inline(always)]
+    pub fn try_pop<T: FromLua + ValueArg>(&mut self) -> Result<T, Error> {
+        const { assert!(T::LEN == 1) }
+        unsafe { helper::try_check_stack(self.0, 2)? };
+        self.try_pop_unchecked()
+    }
+
+    #[inline(always)]
     pub fn pop<T: FromLua + ValueArg>(&mut self) -> Option<T> {
         self.try_pop().ok()
     }
 
     pub fn try_pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Result<R, Error> {
         const { assert!(T::LEN == 1) }
-        unsafe { helper::try_check_stack(self.0, self.1)? };
+        unsafe { helper::try_check_stack(self.0, 2)? };
         let _g = StackGuard::new(self.0);
 
         let len = unsafe { sys::lua_objlen(self.0, self.1) } as i32;
@@ -160,8 +201,8 @@ impl<'t> TableView<'t> {
 
         unsafe { sys::lua_rawgeti_(self.0, self.1, len as _) };
         let value = <T as FromLua>::try_from_lua(self.0, -1)?;
-
         let result = f(&value);
+
         unsafe {
             sys::lua_pushnil(self.0);
             sys::lua_rawseti(self.0, self.1, len as _);
@@ -170,17 +211,16 @@ impl<'t> TableView<'t> {
         Ok(result)
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn pop_then<'a, T: FromLua, F: FnOnce(&T) -> R, R>(&self, f: F) -> Option<R> {
         self.try_pop_then(f).ok()
     }
 
-    pub fn try_clear(&mut self) -> Result<(), Error> {
+    pub(crate) fn try_clear_unchecked(&mut self) -> Result<(), Error> {
         let ptr = self.0;
         let idx = self.1;
 
         unsafe {
-            helper::try_check_stack(ptr, 3)?;
             sys::lua_pushnil(ptr);
             while sys::lua_next(ptr, idx) != 0 {
                 sys::lua_pop(ptr, 1);
@@ -193,26 +233,37 @@ impl<'t> TableView<'t> {
         Ok(())
     }
 
-    #[inline]
+    #[inline(always)]
+    pub fn try_clear(&mut self) -> Result<(), Error> {
+        unsafe { helper::try_check_stack(self.0, 3)? }
+        self.try_clear_unchecked()
+    }
+
+    #[inline(always)]
     pub fn clear(&mut self) {
         self.try_clear().unwrap_display()
     }
 
+    #[inline(always)]
     pub fn len(&self) -> usize {
         unsafe { sys::lua_objlen(self.0, self.1) }
     }
 
+    #[inline(always)]
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
 
-    pub fn try_insert(&mut self, index: i32, value: impl ToLua) -> Result<(), Error> {
+    pub(crate) fn try_insert_unchecked(
+        &mut self,
+        index: i32,
+        value: impl ToLua,
+    ) -> Result<(), Error> {
         unsafe {
             let ptr = self.0;
             let t_idx = self.1;
             let key_addr = SHARED_INSERT_KEY as *mut std::ffi::c_void;
 
-            helper::try_check_stack(ptr, 4)?;
             let _g = StackGuard::new(ptr);
             ensure_cached_func(ptr, key_addr, c"insert");
 
@@ -222,7 +273,7 @@ impl<'t> TableView<'t> {
 
             sys::lua_pushvalue(ptr, t_idx);
             sys::lua_pushinteger(ptr, index as _);
-            value.to_lua_unchecked(ptr);
+            value.try_to_lua_unchecked(ptr)?;
 
             if sys::lua_pcall(ptr, 3, 0, 0) != 0 {
                 Err(Error::from_stack(ptr, -1))
@@ -232,6 +283,13 @@ impl<'t> TableView<'t> {
         }
     }
 
+    #[inline(always)]
+    pub fn try_insert(&mut self, index: i32, value: impl ToLua) -> Result<(), Error> {
+        unsafe { helper::try_check_stack(self.0, 4)? }
+        self.try_insert_unchecked(index, value)
+    }
+
+    #[inline(always)]
     pub fn insert(&mut self, index: i32, value: impl ToLua) {
         self.try_insert(index, value).unwrap_display()
     }
@@ -251,7 +309,7 @@ impl<'t> TableView<'t> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn remove_then<T: FromLua + IsType, F: FnOnce(&T) -> R, R>(
         &mut self,
         index: i32,
@@ -270,7 +328,7 @@ impl<'t> TableView<'t> {
         }
     }
 
-    #[inline]
+    #[inline(always)]
     pub fn remove<T: FromLua + ValueArg + IsType>(&mut self, index: i32) -> Option<T> {
         self.try_remove(index).ok()
     }
@@ -300,21 +358,75 @@ impl<'t> TableView<'t> {
         }
     }
 
-    pub fn try_contains_key<'a, K: ToLua>(&self, key: K) -> Result<bool, Error> {
+    pub fn try_contains_key_unchecked<'a, K: ToLua>(&self, key: K) -> Result<bool, Error> {
         const { assert!(K::LEN == 1) }
-        key.try_to_lua(self.0)?;
-        unsafe { sys::lua_rawget_(self.0, self.1) };
-        let not_nil = unsafe { sys::lua_isnil(self.0, -1) == 0 };
-        unsafe { sys::lua_pop(self.0, 1) };
-        Ok(not_nil)
+        unsafe {
+            key.try_to_lua_unchecked(self.0)?;
+            sys::lua_rawget_(self.0, self.1);
+            let not_nil = sys::lua_isnil(self.0, -1) == 0;
+            sys::lua_pop(self.0, 1);
+            Ok(not_nil)
+        }
     }
 
-    #[inline]
+    #[inline(always)]
+    pub fn try_contains_key<'a, K: ToLua>(&self, key: K) -> Result<bool, Error> {
+        unsafe { helper::try_check_stack(self.0, 1)? }
+        self.try_contains_key_unchecked(key)
+    }
+
+    #[inline(always)]
     pub fn contains_key<'a, K: ToLua>(&self, key: K) -> bool {
         self.try_contains_key(key).unwrap_display()
     }
 
-    pub fn for_each<K, V, F>(&self, mut f: F)
+    pub fn try_for_each_indexed<V, F>(&self, mut f: F) -> Result<(), Error>
+    where
+        V: FromLua,
+        F: FnMut(i32, &V) -> bool,
+    {
+        const { assert!(V::LEN == 1) }
+        let ptr = self.0;
+        let t_idx = self.1;
+
+        let mut current = 1;
+        let len = self.len();
+
+        unsafe {
+            helper::try_check_stack(ptr, 2)?;
+            let _g = StackGuard::new(ptr);
+
+            while current <= len {
+                sys::lua_rawgeti_(ptr, t_idx, current as _);
+                let val = <V as FromLua>::try_from_lua(ptr, -1);
+
+                let should_continue = match val {
+                    Ok(v) => f((current - 1) as i32, &v),
+                    _ => true,
+                };
+
+                sys::lua_pop(ptr, 1);
+                current += 1;
+
+                if !should_continue {
+                    break;
+                }
+            }
+
+            Ok(())
+        }
+    }
+
+    #[inline(always)]
+    pub fn for_each_indexed<V, F>(&self, f: F)
+    where
+        V: FromLua,
+        F: FnMut(i32, &V) -> bool,
+    {
+        self.try_for_each_indexed(f).unwrap_display()
+    }
+
+    pub fn try_for_each<K, V, F>(&self, mut f: F) -> Result<(), Error>
     where
         K: FromLua,
         V: FromLua,
@@ -324,11 +436,8 @@ impl<'t> TableView<'t> {
         let ptr = self.0;
         let t_idx = self.1;
 
-        if let Err(_) = unsafe { helper::try_check_stack(ptr, 2) } {
-            return;
-        }
-
         unsafe {
+            helper::try_check_stack(ptr, 3)?;
             sys::lua_pushnil(ptr);
 
             while sys::lua_next(ptr, t_idx) != 0 {
@@ -344,10 +453,26 @@ impl<'t> TableView<'t> {
 
                 if !should_continue {
                     sys::lua_pop(ptr, 1);
-                    return;
+                    break;
                 }
             }
         }
+
+        Ok(())
+    }
+
+    pub fn for_each<K, V, F>(&self, f: F)
+    where
+        K: FromLua,
+        V: FromLua,
+        F: FnMut(&K, &V) -> bool,
+    {
+        self.try_for_each(f).unwrap_display()
+    }
+
+    #[inline(always)]
+    pub fn has_metatable(&self) -> bool {
+        unsafe { sys::lua_getmetatable(self.0, self.1) != 0 }
     }
 
     pub fn try_with_metatable<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> Result<R, Error> {
@@ -362,7 +487,12 @@ impl<'t> TableView<'t> {
         }
     }
 
-    pub fn try_add_table<K: ToLua, F: FnOnce(&mut StackTable) -> R, R>(
+    #[inline(always)]
+    pub fn with_metatable<F: FnOnce(&StackTable) -> R, R>(&self, f: F) -> R {
+        self.try_with_metatable(f).unwrap_display()
+    }
+
+    pub fn try_create_table_field<K: ToLua, F: FnOnce(&mut StackTable) -> R, R>(
         &mut self,
         k: K,
         narr: i32,
@@ -374,7 +504,7 @@ impl<'t> TableView<'t> {
             helper::try_check_stack(ptr, 3)?;
             let g = StackGuard::new(ptr);
 
-            k.to_lua_unchecked(ptr);
+            k.try_to_lua_unchecked(ptr)?;
             sys::lua_createtable(ptr, narr, nrec);
 
             let tidx = sys::lua_absindex(ptr, -1);
@@ -385,6 +515,18 @@ impl<'t> TableView<'t> {
             g.commit();
             Ok(result)
         }
+    }
+
+    #[inline(always)]
+    pub fn create_table_field<K: ToLua, F: FnOnce(&mut StackTable) -> R, R>(
+        &mut self,
+        k: K,
+        narr: i32,
+        nrec: i32,
+        f: F,
+    ) -> R {
+        self.try_create_table_field(k, narr, nrec, f)
+            .unwrap_display()
     }
 
     pub fn ipairs<'s, T: FromLua + ValueArg>(&'s self) -> Ipairs<'t, 's, T> {
@@ -411,15 +553,68 @@ impl<'t> TableView<'t> {
         }
     }
 
-    pub fn extend_from_slice<T: ToLua + Clone>(&mut self, src: &[T]) {
-        src.iter().for_each(|v| self.push(v.clone()));
+    #[inline(always)]
+    pub fn try_extend_from_vec<T: ToLua>(&mut self, src: Vec<T>) -> Result<(), Error> {
+        unsafe { helper::try_check_stack(self.0, 3)? };
+        for v in src.into_iter() {
+            self.try_push_unchecked(v)?;
+        }
+        Ok(())
     }
 
-    pub fn extend_from_map<'a, K: ToLua + Clone, V: FromLua + ToLua + Clone>(
+    #[inline(always)]
+    pub fn extend_from_vec<T: ToLua>(&mut self, src: Vec<T>) {
+        self.try_extend_from_vec(src).unwrap_display()
+    }
+
+    #[inline(always)]
+    pub fn try_extend_from_map<K: ToLua, V: ToLua>(
+        &mut self,
+        src: HashMap<K, V>,
+    ) -> Result<(), Error> {
+        unsafe { helper::try_check_stack(self.0, 3)? };
+        for (k, v) in src.into_iter() {
+            self.try_set_unchecked(k, v)?;
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn extend_from_map<K: ToLua, V: ToLua>(&mut self, src: HashMap<K, V>) {
+        self.try_extend_from_map(src).unwrap_display()
+    }
+
+    #[inline(always)]
+    pub fn try_clone_from_slice<T: ToLua + Clone>(&mut self, src: &[T]) -> Result<(), Error> {
+        unsafe { helper::try_check_stack(self.0, 3)? };
+        for v in src.iter() {
+            self.try_push_unchecked(v.clone())?
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn clone_from_slice<T: ToLua + Clone>(&mut self, src: &[T]) {
+        self.try_clone_from_slice(src).unwrap_display()
+    }
+
+    #[inline(always)]
+    pub fn try_clone_from_map<'a, K: ToLua + Clone, V: FromLua + ToLua + Clone>(
+        &mut self,
+        src: &HashMap<K, V>,
+    ) -> Result<(), Error> {
+        for (k, v) in src.iter() {
+            self.try_set_unchecked(k.clone(), v.clone())?;
+        }
+        Ok(())
+    }
+
+    #[inline(always)]
+    pub fn clone_from_map<'a, K: ToLua + Clone, V: FromLua + ToLua + Clone>(
         &mut self,
         src: &HashMap<K, V>,
     ) {
-        src.iter().for_each(|(k, v)| self.set(k.clone(), v.clone()));
+        self.try_clone_from_map(src).unwrap_display()
     }
 }
 
