@@ -11,11 +11,11 @@ pub fn call_fn_primitive() {
     lua.open_libs();
 
     let func = lua
-        .do_string::<FnRef<i32, i32>>("return function(x) return x + 1 end")
+        .do_string::<FnRef>("return function(x) return x + 1 end")
         .unwrap();
 
     for i in 0..1000 {
-        let v = func.call(i).unwrap();
+        let v = func.call::<_, i32>(i).unwrap();
         std::hint::black_box(v);
     }
 }
@@ -25,9 +25,9 @@ pub fn call_fn_string_borrowed() {
     lua.open_libs();
 
     let code = "return function() return string.rep('a', 200) end";
-    lua.do_string_with(code, |f: &StackFn<(), StackStr>| {
+    lua.do_string_with(code, |f: &StackFn| {
         for _ in 0..1000 {
-            std::hint::black_box(f.call_then((), |s| s.as_str().len()).unwrap());
+            std::hint::black_box(f.call_then((), |s: &StackStr| s.as_str().len()).unwrap());
         }
     })
     .unwrap();
@@ -38,11 +38,11 @@ pub fn call_fn_string_owned() {
     lua.open_libs();
 
     let func = lua
-        .do_string::<FnRef<(), StrRef>>("return function() return string.rep('a', 200) end")
+        .do_string::<FnRef>("return function() return string.rep('a', 200) end")
         .unwrap();
 
     for _ in 0..1000 {
-        std::hint::black_box(func.call_then((), |s| s.as_str().len()).unwrap());
+        std::hint::black_box(func.call_then((), |s: &StrRef| s.as_str().len()).unwrap());
     }
 }
 
@@ -51,11 +51,11 @@ pub fn call_fn_string_native() {
     lua.open_libs();
 
     let func = lua
-        .do_string::<FnRef<(), String>>("return function() return string.rep('a', 200) end")
+        .do_string::<FnRef>("return function() return string.rep('a', 200) end")
         .unwrap();
 
     for _ in 0..1000 {
-        std::hint::black_box(func.call_then((), |s| s.len()).unwrap());
+        std::hint::black_box(func.call_then((), |s: &String| s.len()).unwrap());
     }
 }
 
@@ -95,14 +95,11 @@ pub fn userdata_mut_borrowed() {
     }
 
     lua.with_globals_mut(|g| g.set("obj", Ud { val: 0 }));
-    lua.do_string_with(
-        "return function(n) return obj:add(n) end",
-        |f: &StackFn<i32, i32>| {
-            for i in 0..1000 {
-                std::hint::black_box(f.call(i).unwrap());
-            }
-        },
-    )
+    lua.do_string_with("return function(n) return obj:add(n) end", |f: &StackFn| {
+        for i in 0..1000 {
+            std::hint::black_box(f.call::<_, i32>(i).unwrap());
+        }
+    })
     .unwrap();
 }
 
@@ -125,11 +122,11 @@ pub fn userdata_mut_owned() {
     lua.with_globals_mut(|g| g.set("obj", Ud { val: 0 }));
 
     let func = lua
-        .do_string::<FnRef<i32, i32>>("return function(n) return obj:add(n) end")
+        .do_string::<FnRef>("return function(n) return obj:add(n) end")
         .unwrap();
 
     for i in 0..1000 {
-        std::hint::black_box(func.call(i).unwrap());
+        std::hint::black_box(func.call::<_, i32>(i).unwrap());
     }
 }
 
@@ -157,7 +154,7 @@ pub fn call_ud_static_sum_loop_borrowed() {
     "#;
 
     std::hint::black_box(
-        lua.do_string_with(code, |f: &StackFn<(), ()>| f.call(()).unwrap())
+        lua.do_string_with(code, |f: &StackFn| f.call::<_, ()>(()).unwrap())
             .unwrap(),
     );
 }
@@ -184,8 +181,8 @@ pub fn call_ud_static_sum_loop_owned() {
         end
     end
     "#;
-    let f = lua.do_string::<FnRef<(), ()>>(code).unwrap();
-    std::hint::black_box(f.call(()).unwrap());
+    let f = lua.do_string::<FnRef>(code).unwrap();
+    std::hint::black_box(f.call::<_, ()>(()).unwrap());
 }
 
 pub fn call_ud_sum_loop_borrowed() {
@@ -217,7 +214,7 @@ pub fn call_ud_sum_loop_borrowed() {
     end
     "#;
     let result = lua
-        .do_string_with(code, |f: &StackFn<(), ()>| f.call(()).unwrap())
+        .do_string_with(code, |f: &StackFn| f.call::<_, ()>(()).unwrap())
         .unwrap();
     std::hint::black_box(result);
 }
@@ -250,6 +247,6 @@ pub fn call_ud_sum_loop_owned() {
         return test:get()
     end
     "#;
-    let f = lua.do_string::<FnRef<(), i32>>(code).unwrap();
-    std::hint::black_box(f.call(()).unwrap());
+    let f = lua.do_string::<FnRef>(code).unwrap();
+    std::hint::black_box(f.call::<_, i32>(()).unwrap());
 }

@@ -545,7 +545,7 @@ fn test_stack_fn() {
 
     #[user_data]
     impl Test {
-        fn test_fn(stack_fn: &StackFn<(i32, i32), (i32, bool)>) -> (i32, bool) {
+        fn test_fn(stack_fn: &StackFn) -> (i32, bool) {
             stack_fn.call((12, 4)).unwrap_or((0, false))
         }
     }
@@ -571,12 +571,12 @@ fn test_fn_ref() {
     lua.open_libs();
 
     struct Test {
-        callback: Option<FnRef<(i32, i32), (i32, bool)>>,
+        callback: Option<FnRef>,
     }
 
     #[user_data]
     impl Test {
-        fn store(&mut self, fn_ref: FnRef<(i32, i32), (i32, bool)>) {
+        fn store(&mut self, fn_ref: FnRef) {
             self.callback = Some(fn_ref);
         }
 

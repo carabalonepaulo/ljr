@@ -55,12 +55,9 @@ fn test_ud_access_after_vm_close_panics_safely() {
 #[test]
 fn test_fn_ref_call_after_vm_close_panics_safely() {
     let func = unsafe {
-        setup_and_kill_vm(|lua| {
-            lua.do_string::<FnRef<(), ()>>("return function() end")
-                .unwrap()
-        })
+        setup_and_kill_vm(|lua| lua.do_string::<FnRef>("return function() end").unwrap())
     };
-    assert!(matches!(func.call(()), Err(Error::LuaStateClosed)));
+    assert!(matches!(func.call::<_, ()>(()), Err(Error::LuaStateClosed)));
 }
 
 #[test]

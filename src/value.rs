@@ -146,37 +146,25 @@ pub trait ValueAccess {
         self.try_as_ud().unwrap_display()
     }
 
-    fn try_with_func<I, O, F, R>(&self, f: F) -> Result<R, Error>
+    fn try_with_func<F, R>(&self, f: F) -> Result<R, Error>
     where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-        F: FnOnce(&StackFn<I, O>) -> R;
+        F: FnOnce(&StackFn) -> R;
 
     #[inline(always)]
-    fn with_func<I, O, F, R>(&self, f: F) -> R
+    fn with_func<F, R>(&self, f: F) -> R
     where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-        F: FnOnce(&StackFn<I, O>) -> R,
+        F: FnOnce(&StackFn) -> R,
     {
         self.try_with_func(f).unwrap_display()
     }
 
     #[inline(always)]
-    fn try_as_func<I, O>(&self) -> Result<FnRef<I, O>, Error>
-    where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-    {
+    fn try_as_func(&self) -> Result<FnRef, Error> {
         self.try_with_func(|v| v.try_to_owned()).flatten()
     }
 
     #[inline(always)]
-    fn as_func<I, O>(&self) -> FnRef<I, O>
-    where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-    {
+    fn as_func(&self) -> FnRef {
         self.try_as_func().unwrap_display()
     }
 
@@ -261,14 +249,12 @@ impl ValueAccess for BorrowedState {
         }
     }
 
-    fn try_with_func<I, O, F, R>(&self, f: F) -> Result<R, Error>
+    fn try_with_func<F, R>(&self, f: F) -> Result<R, Error>
     where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-        F: FnOnce(&StackFn<I, O>) -> R,
+        F: FnOnce(&StackFn) -> R,
     {
         match self.kind {
-            Kind::Func => Ok(f(&StackFn::<I, O>::try_from_lua(self.ptr, self.idx)?)),
+            Kind::Func => Ok(f(&StackFn::try_from_lua(self.ptr, self.idx)?)),
             _ => Err(Error::UnexpectedType),
         }
     }
@@ -384,14 +370,12 @@ impl ValueAccess for OwnedState {
         }
     }
 
-    fn try_with_func<I, O, F, R>(&self, f: F) -> Result<R, Error>
+    fn try_with_func<F, R>(&self, f: F) -> Result<R, Error>
     where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-        F: FnOnce(&StackFn<I, O>) -> R,
+        F: FnOnce(&StackFn) -> R,
     {
         match self.kind {
-            Kind::Func => self.with_value(|ptr| Ok(f(&StackFn::<I, O>::try_from_lua(ptr, -1)?))),
+            Kind::Func => self.with_value(|ptr| Ok(f(&StackFn::try_from_lua(ptr, -1)?))),
             _ => Err(Error::UnexpectedType),
         }
     }
@@ -542,40 +526,28 @@ where
     }
 
     #[inline(always)]
-    pub fn try_with_func<I, O, F, R>(&self, f: F) -> Result<R, Error>
+    pub fn try_with_func<F, R>(&self, f: F) -> Result<R, Error>
     where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-        F: FnOnce(&StackFn<I, O>) -> R,
+        F: FnOnce(&StackFn) -> R,
     {
         self.state.try_with_func(f)
     }
 
     #[inline(always)]
-    pub fn with_func<I, O, F, R>(&self, f: F) -> R
+    pub fn with_func<F, R>(&self, f: F) -> R
     where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-        F: FnOnce(&StackFn<I, O>) -> R,
+        F: FnOnce(&StackFn) -> R,
     {
         self.state.with_func(f)
     }
 
     #[inline(always)]
-    pub fn try_as_func<I, O>(&self) -> Result<FnRef<I, O>, Error>
-    where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-    {
+    pub fn try_as_func(&self) -> Result<FnRef, Error> {
         self.state.try_as_func()
     }
 
     #[inline(always)]
-    pub fn as_func<I, O>(&self) -> FnRef<I, O>
-    where
-        I: FromLua + ToLua,
-        O: FromLua + ToLua,
-    {
+    pub fn as_func(&self) -> FnRef {
         self.state.as_func()
     }
 

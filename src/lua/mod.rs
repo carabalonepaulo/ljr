@@ -367,19 +367,13 @@ impl_value_arg!(
     String,
     StrRef,
     TableRef,
+    FnRef,
     Vec<u8>
 );
 
 unsafe impl<T> ValueArg for UdRef<T> where T: UserData {}
 
 unsafe impl<T> ValueArg for Option<T> where T: FromLua + ValueArg {}
-
-unsafe impl<I, O> ValueArg for FnRef<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
-}
 
 generate_value_arg_tuple_impl!();
 

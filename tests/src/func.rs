@@ -7,10 +7,10 @@ fn test_fn_ref_unit_return() {
     lua.open_libs();
 
     let lua_fn = lua
-        .do_string::<FnRef<String, ()>>("return function(str) return 'hello world' end")
+        .do_string::<FnRef>("return function(str) return 'hello world' end")
         .unwrap();
 
-    let result = lua_fn.call("hello".into());
+    let result = lua_fn.call("hello");
     assert!(matches!(result, Ok(())));
     assert_eq!(lua.top(), 0);
 }
@@ -21,10 +21,10 @@ fn test_fn_ref_wrong_return() {
     lua.open_libs();
 
     let lua_fn = lua
-        .do_string::<FnRef<String, (bool, i32)>>("return function(str) return false end")
+        .do_string::<FnRef>("return function(str) return false end")
         .unwrap();
 
-    let result = lua_fn.call("hello".into());
+    let result: Result<(bool, i32), _> = lua_fn.call("hello");
     assert!(matches!(result, Err(Error::UnexpectedType)));
     assert_eq!(lua.top(), 0);
 }
@@ -34,11 +34,9 @@ fn test_fn_ref_no_return() {
     let mut lua = Lua::new();
     lua.open_libs();
 
-    let lua_fn = lua
-        .do_string::<FnRef<String, (bool, i32)>>("return function(str) end")
-        .unwrap();
+    let lua_fn = lua.do_string::<FnRef>("return function(str) end").unwrap();
 
-    let result = lua_fn.call("hello".into());
+    let result: Result<(bool, i32), _> = lua_fn.call("hello");
     assert!(matches!(result, Err(Error::UnexpectedType)));
     assert_eq!(lua.top(), 0);
 }
@@ -48,9 +46,7 @@ fn test_fn_ref_no_arg_no_return() {
     let mut lua = Lua::new();
     lua.open_libs();
 
-    let lua_fn = lua
-        .do_string::<FnRef<(), ()>>("return function() end")
-        .unwrap();
+    let lua_fn = lua.do_string::<FnRef>("return function() end").unwrap();
 
     let result = lua_fn.call(());
     assert!(matches!(result, Ok(())));
@@ -66,8 +62,8 @@ fn test_fn_ref_unit_return_on_user_data() {
 
     #[user_data]
     impl Test {
-        fn call(fn_ref: FnRef<String, ()>) -> (bool, bool) {
-            let result = fn_ref.call("hello".into());
+        fn call(fn_ref: FnRef) -> (bool, bool) {
+            let result = fn_ref.call::<_, ()>("hello");
             match result {
                 Ok(v) => (true, v == ()),
                 _ => (false, false),
@@ -115,16 +111,16 @@ fn test_return_fn_ref() {
     lua.open_libs();
 
     struct Test {
-        fn_ref: Option<FnRef<String, i32>>,
+        fn_ref: Option<FnRef>,
     }
 
     #[user_data]
     impl Test {
-        fn store(&mut self, fn_ref: FnRef<String, i32>) {
+        fn store(&mut self, fn_ref: FnRef) {
             self.fn_ref = Some(fn_ref);
         }
 
-        fn get(&self) -> Option<FnRef<String, i32>> {
+        fn get(&self) -> Option<FnRef> {
             self.fn_ref.as_ref().cloned()
         }
     }
@@ -152,7 +148,7 @@ fn test_func_call_stack_leak() {
     lua.open_libs();
 
     let func = lua
-        .do_string::<FnRef<(), i32>>("return function() return 42 end")
+        .do_string::<FnRef>("return function() return 42 end")
         .unwrap();
 
     assert_eq!(lua.top(), 0);
@@ -191,9 +187,9 @@ fn test_callback_with_stack_ud_return() {
     struct Runner;
     #[user_data]
     impl Runner {
-        fn execute(callback: &StackFn<(), StackUd<Item>>) -> i32 {
+        fn execute(callback: &StackFn) -> i32 {
             callback
-                .call_then((), |item| item.with(|i| i.get()))
+                .call_then((), |item: &StackUd<Item>| item.with(|i| i.get()))
                 .unwrap_or(-1)
         }
     }
@@ -223,8 +219,9 @@ fn test_callback_with_str_ref_return() {
 
     #[user_data]
     impl Runner {
-        fn len(cb: &StackFn<(), StackStr>) -> i32 {
-            cb.call_then((), |s| s.as_str().len() as i32).unwrap_or(-1)
+        fn len(cb: &StackFn) -> i32 {
+            cb.call_then((), |s: &StackStr| s.as_str().len() as i32)
+                .unwrap_or(-1)
         }
     }
 
@@ -252,12 +249,12 @@ fn test_callback_nested_calls() {
     struct Processor;
     #[user_data]
     impl Processor {
-        fn process(data: &StackFn<i32, i32>) -> i32 {
+        fn process(data: &StackFn) -> i32 {
             data.call(10).unwrap_or(0) + 5
         }
 
-        fn process_borrowed(data: &StackFn<i32, i32>) -> i32 {
-            data.call_then(20, |ret| *ret + 5).unwrap_or(0)
+        fn process_borrowed(data: &StackFn) -> i32 {
+            data.call_then(20, |ret: &i32| *ret + 5).unwrap_or(0)
         }
     }
 
@@ -319,7 +316,7 @@ fn test_integration_table_iter_func_call_with_stack_ud() {
     let mut total = 0;
 
     table.with(|t| {
-        t.for_each(|_k: &i32, func: &StackFn<(), StackUd<Item>>| {
+        t.for_each(|_k: &i32, func: &StackFn| {
             let val = func
                 .call_then((), |item_ud: &StackUd<Item>| item_ud.with(|i| i.get()))
                 .unwrap_or(0);

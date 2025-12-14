@@ -86,16 +86,16 @@ fn test_callback_reentrancy() {
             self.state.clone()
         }
 
-        fn unsafe_run(&mut self, callback: &StackFn<(), ()>) {
+        fn unsafe_run(&mut self, callback: &StackFn) {
             self.state = "running".to_string();
-            callback.call(()).unwrap();
+            callback.call::<_, ()>(()).unwrap();
         }
 
-        fn safe_run(ud: &mut StackUd<System>, callback: &StackFn<(), ()>) {
+        fn safe_run(ud: &mut StackUd<System>, callback: &StackFn) {
             {
                 ud.with_mut(|v| v.state = "running".to_string());
             }
-            callback.call(()).unwrap();
+            callback.call::<_, ()>(()).unwrap();
             {
                 ud.with_mut(|v| v.state = "finished".to_string());
             }
@@ -159,9 +159,9 @@ fn test_callback_reentrancy_with_result() {
             self.state.clone()
         }
 
-        fn unsafe_run(&mut self, callback: &StackFn<(), ()>) -> Result<(), Error> {
+        fn unsafe_run(&mut self, callback: &StackFn) -> Result<(), Error> {
             self.state = "running".to_string();
-            callback.call(())
+            callback.call::<_, ()>(())
         }
     }
 

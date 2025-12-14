@@ -37,7 +37,7 @@ fn test_fn() {
     lua.with_globals(|g| {
         g.view("sum", |v: &StackValue| {
             let result = v
-                .try_with_func(|f: &StackFn<(i32, i32), i32>| f.call((2, 3)).unwrap())
+                .try_with_func(|f: &StackFn| f.call::<_, i32>((2, 3)).unwrap())
                 .unwrap();
             assert_eq!(result, 5);
         })

@@ -1,7 +1,6 @@
 use std::{
     cell::RefCell,
     hash::{Hash, Hasher},
-    marker::PhantomData,
     rc::Rc,
 };
 
@@ -18,7 +17,7 @@ use crate::{
     to_lua::ToLua,
 };
 
-pub trait FuncState<I, O> {
+pub trait FuncState {
     type State;
 }
 
@@ -68,30 +67,17 @@ pub trait FuncAccess {
     }
 }
 
-pub struct BorrowedState<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+pub struct BorrowedState {
     ptr: *mut sys::lua_State,
     idx: i32,
     fn_ptr: *const std::ffi::c_void,
-    marker: PhantomData<(I, O)>,
 }
 
-impl<I, O> FuncState<I, O> for Borrowed
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
-    type State = BorrowedState<I, O>;
+impl FuncState for Borrowed {
+    type State = BorrowedState;
 }
 
-impl<I, O> FuncAccess for BorrowedState<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+impl FuncAccess for BorrowedState {
     fn try_ptr(&self) -> Result<*mut sys::lua_State, Error> {
         Ok(self.ptr)
     }
@@ -106,22 +92,13 @@ where
 }
 
 #[derive(Debug)]
-pub struct OwnedState<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+pub struct OwnedState {
     lua: RefCell<Rc<InnerLua>>,
     id: i32,
     fn_ptr: *const std::ffi::c_void,
-    marker: PhantomData<(I, O)>,
 }
 
-impl<I, O> Drop for OwnedState<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+impl Drop for OwnedState {
     fn drop(&mut self) {
         if let Ok(ptr) = self.lua.borrow().try_state() {
             unsafe { sys::luaL_unref(ptr, sys::LUA_REGISTRYINDEX, self.id) };
@@ -129,19 +106,11 @@ where
     }
 }
 
-impl<I, O> FuncState<I, O> for Owned
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
-    type State = OwnedState<I, O>;
+impl FuncState for Owned {
+    type State = OwnedState;
 }
 
-impl<I, O> FuncAccess for OwnedState<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+impl FuncAccess for OwnedState {
     fn try_ptr(&self) -> Result<*mut sys::lua_State, Error> {
         self.lua.borrow().try_state()
     }
@@ -155,59 +124,51 @@ where
     }
 }
 
-pub type StackFn<I, O> = Func<Borrowed, I, O>;
-pub type FnRef<I, O> = Func<Owned, I, O>;
+pub type StackFn = Func<Borrowed>;
+pub type FnRef = Func<Owned>;
 
-pub struct Func<M, I, O>
+pub struct Func<M>
 where
-    M: Mode + FuncState<I, O>,
+    M: Mode + FuncState,
     M::State: FuncAccess,
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
 {
     state: M::State,
 }
 
-impl<M, I, O> Func<M, I, O>
+impl<M> Func<M>
 where
-    M: Mode + FuncState<I, O>,
+    M: Mode + FuncState,
     M::State: FuncAccess,
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
 {
-    pub fn call(&self, args: I) -> Result<O, Error>
+    pub fn call<I: ToLua, O: FromLua>(&self, args: I) -> Result<O, Error>
     where
         O: ValueArg,
     {
         self.state.try_call(args)
     }
 
-    pub fn call_then<F: FnOnce(&O) -> R, R>(&self, args: I, f: F) -> Result<R, Error> {
+    pub fn call_then<I: ToLua, O: FromLua, F: FnOnce(&O) -> R, R>(
+        &self,
+        args: I,
+        f: F,
+    ) -> Result<R, Error> {
         self.state.try_call_then(args, f)
     }
 }
 
-impl<I, O> StackFn<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+impl StackFn {
     #[inline(always)]
-    pub fn try_to_owned(&self) -> Result<FnRef<I, O>, Error> {
-        FnRef::<I, O>::try_from_lua(self.state.ptr, self.state.idx)
+    pub fn try_to_owned(&self) -> Result<FnRef, Error> {
+        FnRef::try_from_lua(self.state.ptr, self.state.idx)
     }
 
     #[inline(always)]
-    pub fn to_owned(&self) -> FnRef<I, O> {
+    pub fn to_owned(&self) -> FnRef {
         self.try_to_owned().unwrap_display()
     }
 }
 
-impl<I, O> FnRef<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+impl FnRef {
     pub fn try_clone(&self) -> Result<Self, Error> {
         let lua = self.state.lua.clone();
         let fn_ptr = self.state.fn_ptr;
@@ -217,43 +178,25 @@ where
             sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX)
         };
         Ok(Self {
-            state: OwnedState {
-                lua,
-                id,
-                fn_ptr,
-                marker: PhantomData,
-            },
+            state: OwnedState { lua, id, fn_ptr },
         })
     }
 }
 
-impl<I, O> Clone for FnRef<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+impl Clone for FnRef {
     fn clone(&self) -> Self {
         self.try_clone().unwrap_display()
     }
 }
 
-unsafe impl<I, O> FromLua for StackFn<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+unsafe impl FromLua for StackFn {
     fn try_from_lua(ptr: *mut sys::lua_State, idx: i32) -> Result<Self, Error> {
         unsafe {
             let idx = sys::lua_absindex(ptr, idx);
             if sys::lua_isfunction(ptr, idx) != 0 {
                 let fn_ptr = sys::lua_topointer(ptr, idx);
                 Ok(StackFn {
-                    state: BorrowedState {
-                        ptr,
-                        idx,
-                        fn_ptr,
-                        marker: PhantomData,
-                    },
+                    state: BorrowedState { ptr, idx, fn_ptr },
                 })
             } else {
                 Err(Error::UnexpectedType)
@@ -262,11 +205,7 @@ where
     }
 }
 
-unsafe impl<I, O> FromLua for FnRef<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+unsafe impl FromLua for FnRef {
     fn try_from_lua(ptr: *mut sys::lua_State, idx: i32) -> Result<Self, Error> {
         unsafe {
             let idx = sys::lua_absindex(ptr, idx);
@@ -276,12 +215,7 @@ where
                 sys::lua_pushvalue(ptr, idx);
                 let id = sys::luaL_ref(ptr, sys::LUA_REGISTRYINDEX);
                 Ok(FnRef {
-                    state: OwnedState {
-                        lua,
-                        id,
-                        fn_ptr,
-                        marker: PhantomData,
-                    },
+                    state: OwnedState { lua, id, fn_ptr },
                 })
             } else {
                 Err(Error::UnexpectedType)
@@ -290,11 +224,7 @@ where
     }
 }
 
-unsafe impl<I, O> ToLua for &StackFn<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+unsafe impl ToLua for &StackFn {
     unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
         InnerLua::try_ensure_context_raw(self.state.ptr, ptr)?;
         unsafe { sys::lua_pushvalue(ptr, self.state.idx) };
@@ -302,21 +232,13 @@ where
     }
 }
 
-unsafe impl<I, O> ToLua for StackFn<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+unsafe impl ToLua for StackFn {
     unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
         unsafe { (&self).try_to_lua_unchecked(ptr) }
     }
 }
 
-unsafe impl<I, O> ToLua for &FnRef<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+unsafe impl ToLua for &FnRef {
     unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
         InnerLua::try_ensure_context_raw(self.state.lua.borrow().try_state()?, ptr)?;
         unsafe { sys::lua_rawgeti(ptr, sys::LUA_REGISTRYINDEX, self.state.id as _) };
@@ -324,63 +246,44 @@ where
     }
 }
 
-unsafe impl<I, O> ToLua for FnRef<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+unsafe impl ToLua for FnRef {
     unsafe fn try_to_lua_unchecked(self, ptr: *mut sys::lua_State) -> Result<(), Error> {
         unsafe { (&self).try_to_lua_unchecked(ptr) }
     }
 }
 
-impl<M1, M2, I, O> PartialEq<Func<M2, I, O>> for Func<M1, I, O>
+impl<M1, M2> PartialEq<Func<M2>> for Func<M1>
 where
-    M1: Mode + FuncState<I, O>,
+    M1: Mode + FuncState,
     M1::State: FuncAccess,
-    M2: Mode + FuncState<I, O>,
+    M2: Mode + FuncState,
     M2::State: FuncAccess,
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
 {
-    fn eq(&self, other: &Func<M2, I, O>) -> bool {
+    fn eq(&self, other: &Func<M2>) -> bool {
         self.state.fn_ptr() == other.state.fn_ptr()
     }
 }
 
-impl<M, I, O> Eq for Func<M, I, O>
+impl<M> Eq for Func<M>
 where
-    M: Mode + FuncState<I, O>,
+    M: Mode + FuncState,
     M::State: FuncAccess,
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
 {
 }
 
-impl<M, I, O> Hash for Func<M, I, O>
+impl<M> Hash for Func<M>
 where
-    M: Mode + FuncState<I, O>,
+    M: Mode + FuncState,
     M::State: FuncAccess,
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
 {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.state.fn_ptr().hash(state);
     }
 }
 
-impl<I, O> crate::owned_value::private::Sealed for FnRef<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
-}
+impl crate::owned_value::private::Sealed for FnRef {}
 
-impl<I, O> OwnedValue for FnRef<I, O>
-where
-    I: FromLua + ToLua,
-    O: FromLua + ToLua,
-{
+impl OwnedValue for FnRef {
     fn handle(&self) -> LuaInnerHandle<'_> {
         LuaInnerHandle(&self.state.lua)
     }
