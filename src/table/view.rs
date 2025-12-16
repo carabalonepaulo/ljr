@@ -492,6 +492,37 @@ impl<'t> TableView<'t> {
         self.try_with_metatable(f).unwrap_display()
     }
 
+    pub fn try_push_table<F: FnOnce(&mut StackTable) -> R, R>(
+        &mut self,
+        narr: i32,
+        nrec: i32,
+        f: F,
+    ) -> Result<R, Error> {
+        let ptr = self.0;
+
+        unsafe {
+            helper::try_check_stack(ptr, 1)?;
+            let g = StackGuard::new(ptr);
+            sys::lua_createtable(ptr, narr, nrec);
+            let mut table = StackTable::from_stack(ptr, -1);
+            let result = f(&mut table);
+            let len = sys::lua_objlen(ptr, self.1);
+            sys::lua_rawseti_(ptr, self.1, (len + 1) as _);
+            g.commit();
+            Ok(result)
+        }
+    }
+
+    #[inline(always)]
+    pub fn push_table<F: FnOnce(&mut StackTable) -> R, R>(
+        &mut self,
+        narr: i32,
+        nrec: i32,
+        f: F,
+    ) -> R {
+        self.try_push_table(narr, nrec, f).unwrap_display()
+    }
+
     pub fn try_create_table_field<K: ToLua, F: FnOnce(&mut StackTable) -> R, R>(
         &mut self,
         k: K,
