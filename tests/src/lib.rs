@@ -9,7 +9,7 @@ mod table;
 mod value;
 
 #[cfg(test)]
-use ljr::prelude::*;
+use ljr::{Error, prelude::*};
 
 #[cfg(test)]
 static STDERR_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());

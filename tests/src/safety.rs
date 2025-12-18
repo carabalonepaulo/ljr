@@ -1,7 +1,5 @@
 #[cfg(test)]
-use ljr::prelude::*;
-#[cfg(test)]
-use ljr::sys;
+use ljr::{Error, prelude::*, sys};
 
 #[cfg(test)]
 unsafe fn setup_and_kill_vm<T, F>(factory: F) -> T

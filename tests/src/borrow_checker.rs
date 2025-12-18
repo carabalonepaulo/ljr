@@ -1,5 +1,5 @@
 #[cfg(test)]
-use ljr::prelude::*;
+use ljr::{Error, prelude::*};
 
 #[cfg(test)]
 use crate::STDERR_LOCK;

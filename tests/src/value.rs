@@ -1,5 +1,5 @@
 #[cfg(test)]
-use ljr::prelude::*;
+use ljr::{UnwrapDisplay, prelude::*};
 
 #[test]
 fn test_primitives() {

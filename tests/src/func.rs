@@ -1,5 +1,5 @@
 #[cfg(test)]
-use ljr::prelude::*;
+use ljr::{Error, prelude::*};
 
 #[test]
 fn test_fn_ref_unit_return() {

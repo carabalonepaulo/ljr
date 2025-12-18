@@ -1,7 +1,7 @@
 #[cfg(test)]
-use ljr::prelude::*;
-#[cfg(test)]
 use ljr::table::view::TableView;
+#[cfg(test)]
+use ljr::{Error, prelude::*};
 
 #[test]
 fn test_stack_table_mutation() {

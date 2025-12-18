@@ -12,6 +12,9 @@ pub mod value;
 pub mod from_lua;
 pub mod is_type;
 pub mod to_lua;
+
+pub use error::Error;
+pub use error::UnwrapDisplay;
 pub use macros::*;
 pub use mlua_sys as sys;
 
@@ -40,7 +43,7 @@ pub mod prelude {
     pub use crate::Nil;
     pub use crate::UserData;
     pub use crate::create_table;
-    pub use crate::error::{Error, UnwrapDisplay};
+    // pub use crate::error::{Error, UnwrapDisplay};
     pub use crate::func::{FnRef, StackFn};
     pub use crate::lstr::{StackStr, StrRef};
     pub use crate::lua::Lua;
